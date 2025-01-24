@@ -1,6 +1,8 @@
 const std = @import("std");
 const x = @cImport(@cInclude("X11/Xlib.h")); // X11 library
 
+const wm = @import("wm.zig");
+
 const print = std.debug.print;
 
 fn error_handler(display: ?*x.Display, event: [*c]x.XErrorEvent) callconv(.C) c_int {
@@ -46,79 +48,27 @@ fn handle_button(event: *x.XButtonPressedEvent) void {
 const Arg = union(enum) {
     s: *const []u8,
     f: f32,
+    i: i32,
 };
 
 const Shortcut = struct {
     modifier: i8,
     key: i8,
-    handler: *void,
+    handler: *fn (...) void,
     args: []Arg,
 };
 
-const shortcuts: []Shortcut = .{.{ .modifier = 10 }};
+const shortcuts: []Shortcut = .{.{
+    .modifier = 10,
+}};
 
 pub fn main() !void {
-    const display: *x.Display = x.XOpenDisplay(null) orelse {
-        print("Cannot open display\n", .{});
-        return error.CannotOpenDisplay;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var manager = wm.WM.init(&gpa.allocator());
+
+    manager.start() catch {
+        std.log.err("Hey we got some issues man\n", .{});
     };
 
-    defer _ = x.XCloseDisplay(display);
-
-    print("Opened display {p}\n", .{display});
-
-    const screen = x.XDefaultScreen(display);
-    print("Default screen {}\n", .{screen});
-
-    const root = x.XRootWindow(display, screen);
-    print("Root window {d}\n", .{root});
-
-    _ = x.XSetErrorHandler(error_handler);
-
-    // Try to become the window manager by selecting SubstructureRedirectMask
-    // This will fail if another window manager is running
-    const result = x.XSelectInput(display, root, x.SubstructureRedirectMask | x.SubstructureNotifyMask | x.ButtonPressMask | x.KeyPressMask);
-
-    if (result == 0) {
-        const stderr = std.io.getStdErr().writer();
-        try stderr.print("Failed to become window manager (another WM running?)\n", .{});
-        return error.FailedToBecome;
-    }
-
-    var event: x.XEvent = undefined;
-    const running = true;
-    while (running) {
-        _ = x.XSync(display, 0);
-        _ = x.XNextEvent(display, &event);
-
-        switch (event.type) {
-            x.ButtonPress => {
-                handle_button(@as(*x.XButtonPressedEvent, @ptrCast(&event)));
-            },
-            x.KeyPress => {
-                handle_keypress(&event);
-            },
-            x.CreateNotify => {
-                const create_event = @as(*x.XCreateWindowEvent, @ptrCast(&event));
-                print("Window created: {}\n", .{create_event.window});
-            },
-            x.MapRequest => {
-                const map_request = @as(*x.XMapRequestEvent, @ptrCast(&event));
-                print("Map request for window: {}\n", .{map_request.window});
-                // Actually map (show) the window
-                _ = x.XMapWindow(display, map_request.window);
-                _ = x.XSync(display, 0);
-            },
-            else => {},
-        }
-    }
+    defer manager.deinit();
 }
-
-// Handle keyboard shortcuts the cool way :)
-//
-
-// 1) Registering a method with args like dwm
-
-// 2) Creating a plugin system
-//
-// listen for events and get a reference to the wm context
