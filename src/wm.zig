@@ -2,17 +2,18 @@ const std = @import("std");
 const x = @cImport(@cInclude("X11/Xlib.h")); // X11 library
 const stderr = std.io.getStdErr().writer();
 
+const Cursor = @import("Cursor.zig");
+
 const Alloc = std.mem.Allocator;
 
 fn x_error_handler(_: ?*x.Display, event: [*c]x.XErrorEvent) callconv(.C) c_int {
-    std.log.err("X11 error: {}\n", .{event.*});
     WM.error_ctx.wm.handle_error(event);
     WM.error_ctx.last_error = event.*;
     return 0;
 }
 
 pub const WM = struct {
-    const event_mask = x.SubstructureRedirectMask | x.SubstructureNotifyMask | x.ButtonPressMask | x.KeyPressMask;
+    const event_mask = x.SubstructureRedirectMask | x.SubstructureNotifyMask | x.ButtonPressMask | x.KeyPressMask | x.EnterWindowMask;
     const Self = @This();
 
     const Error = error{ FailedBecome, CannotOpenDisplay };
@@ -29,12 +30,14 @@ pub const WM = struct {
     root: x.Window,
     allocator: *const Alloc,
     running: bool = true,
+    cursors: [3]Cursor,
 
     pub fn init(allocator: *const Alloc) WM {
         return WM{
             .display = undefined,
             .screen = undefined,
             .root = undefined,
+            .cursors = undefined,
             .allocator = allocator,
         };
     }
@@ -54,9 +57,15 @@ pub const WM = struct {
 
         try self.setup_inputs();
 
+        // const cursor = x.XCreateFontCursor(self.display, 68);
+        // _ = x.XDefineCursor(self.display, self.root, cursor);
+        //
+        try self.init_cursors();
+        defer self.deinit_cursors();
+
         while (self.running) {
-            _ = x.XSync(self.display, 0);
             _ = x.XNextEvent(self.display, &event);
+            _ = x.XSync(self.display, 0);
 
             self.handle_event(&event);
         }
@@ -84,8 +93,6 @@ pub const WM = struct {
             std.log.err("Failed to become window manager (another WM running?)\n", .{});
             return Error.FailedBecome;
         }
-
-        std.log.info("I am your father\n", .{});
     }
 
     fn init_error(self: *Self) void {
@@ -104,12 +111,27 @@ pub const WM = struct {
         };
     }
 
-    fn handle_error(self: *Self, event: [*c]x.XErrorEvent) void {
-        _ = self;
-        _ = event;
+    fn init_cursors(self: *Self) !void {
+        self.cursors[0] = Cursor.createHover().init(self.display);
+        self.cursors[1] = Cursor.createResize().init(self.display);
+        self.cursors[2] = Cursor.createMove().init(self.display);
+
+        x.XDefineCursor(self.display, self.root, self.cursors[2].cursor);
     }
 
-    fn handle_event(_: *Self, event: [*c]x.XEvent) void {
+    fn deinit_cursors(self: *Self) void {
+        for (self.cursors) |*cursor| {
+            cursor.deinit();
+        }
+    }
+
+    fn handle_error(self: *Self, event: [*c]x.XErrorEvent) void {
+        // I have no idea how we should handle errors
+        self.running = false;
+        std.log.err("X11 error: {}\n", .{event.*});
+    }
+
+    fn handle_event(self: *Self, event: [*c]x.XEvent) void {
         switch (event.*.type) {
             x.ButtonPress => {
                 const casted = @as(*x.XButtonPressedEvent, @ptrCast(event));
@@ -118,6 +140,20 @@ pub const WM = struct {
             x.KeyPress => {
                 const casted = @as(*x.XKeyPressedEvent, @ptrCast(event));
                 std.log.info("Key Pressed: {b:0>8}", .{casted.keycode});
+            },
+            x.MapRequest => {
+                std.log.info("maprequst", .{});
+                const casted = @as(*x.XMapRequestEvent, @ptrCast(event));
+                _ = x.XMapWindow(self.display, self.root);
+                _ = x.XMapWindow(self.display, casted.window);
+                _ = x.XSetWindowBorderWidth(self.display, casted.window, 10);
+            },
+            x.MapNotify => {
+                const casted = @as(*x.XKeyPressedEvent, @ptrCast(event));
+                std.log.info("window created {d}", .{casted.keycode});
+            },
+            x.EnterNotify => {
+                std.log.info("window entered", .{});
             },
             else => {
                 // TODO: unhandled cases

@@ -5,12 +5,6 @@ const wm = @import("wm.zig");
 
 const print = std.debug.print;
 
-fn error_handler(display: ?*x.Display, event: [*c]x.XErrorEvent) callconv(.C) c_int {
-    _ = display;
-    print("X11 error: {}\n", .{event.*});
-    return 0;
-}
-
 fn handle_keypress(event: *x.XEvent) void {
     const c = @as(*x.XKeyEvent, @ptrCast(event));
     print("Key pressed: {d}, x:{d} y: {d}, {d}, {b:0>8}\n", .{ c.keycode, c.x, c.y, c.time, c.state });
@@ -64,11 +58,11 @@ const shortcuts: []Shortcut = .{.{
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+
     var manager = wm.WM.init(&gpa.allocator());
+    defer manager.deinit();
 
     manager.start() catch {
         std.log.err("Hey we got some issues man\n", .{});
     };
-
-    defer manager.deinit();
 }
