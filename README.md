@@ -2,12 +2,8 @@
 
 A based window manager made using zig.
 
-## Today
+## Features
 
-- Cool way to handle keyboard shortcuts
-
-## TODO
-
-[ ] Read keyboard presses
-[ ] Create zig build script
-[ ] Launch application in new x11 environment
+* User can define keyboard shortcuts in the config
+* Easy way to implement layouts and window arrangment
+* 

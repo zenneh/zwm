@@ -1,36 +1,32 @@
 const std = @import("std");
-const x = @cImport(@cInclude("X11/Xlib.h")); // X11 library
+const x = @import("X11.zig").x;
 const stderr = std.io.getStdErr().writer();
 
 const Cursor = @import("Cursor.zig");
 
 const Alloc = std.mem.Allocator;
 
-fn x_error_handler(_: ?*x.Display, event: [*c]x.XErrorEvent) callconv(.C) c_int {
-    WM.error_ctx.wm.handle_error(event);
-    WM.error_ctx.last_error = event.*;
-    return 0;
-}
+const ErrorClosure = struct {
+    var wm: ?*WM = null;
+
+    fn handle(_: ?*x.Display, event: [*c]x.XErrorEvent) callconv(.C) c_int {
+        if (wm != null) wm.?.handle_error(event);
+        return 0;
+    }
+};
 
 pub const WM = struct {
     const event_mask = x.SubstructureRedirectMask | x.SubstructureNotifyMask | x.ButtonPressMask | x.KeyPressMask | x.EnterWindowMask;
     const Self = @This();
 
-    const Error = error{ FailedBecome, CannotOpenDisplay };
-
-    const ErrorContext = struct {
-        wm: *WM,
-        last_error: ?x.XErrorEvent = null,
-    };
-
-    var error_ctx: ErrorContext = undefined;
+    const Error = error{ FailedBecome, CannotOpenDisplay, Cursor };
 
     display: *x.Display,
     screen: c_int,
     root: x.Window,
     allocator: *const Alloc,
     running: bool = true,
-    cursors: [3]Cursor,
+    cursors: [3]*const Cursor,
 
     pub fn init(allocator: *const Alloc) WM {
         return WM{
@@ -60,7 +56,7 @@ pub const WM = struct {
         // const cursor = x.XCreateFontCursor(self.display, 68);
         // _ = x.XDefineCursor(self.display, self.root, cursor);
         //
-        try self.init_cursors();
+        self.init_cursors() catch return Error.Cursor;
         defer self.deinit_cursors();
 
         while (self.running) {
@@ -96,32 +92,34 @@ pub const WM = struct {
     }
 
     fn init_error(self: *Self) void {
-        error_ctx = .{
-            .wm = self,
-            .last_error = null,
-        };
-
-        _ = x.XSetErrorHandler(x_error_handler);
+        ErrorClosure.wm = self;
+        _ = x.XSetErrorHandler(ErrorClosure.handle);
+        // I want this
     }
 
     fn deinit_error(_: *Self) void {
-        WM.error_ctx = .{
-            .wm = undefined,
-            .last_error = null,
-        };
+        ErrorClosure.wm = undefined;
     }
 
     fn init_cursors(self: *Self) !void {
-        self.cursors[0] = Cursor.createHover().init(self.display);
-        self.cursors[1] = Cursor.createResize().init(self.display);
-        self.cursors[2] = Cursor.createMove().init(self.display);
+        var hover = try Cursor.createHover(self.allocator);
+        var resize = try Cursor.createResize(self.allocator);
+        var move = try Cursor.createMove(self.allocator);
 
-        x.XDefineCursor(self.display, self.root, self.cursors[2].cursor);
+        hover.init(self.display);
+        resize.init(self.display);
+        move.init(self.display);
+
+        self.cursors[0] = hover;
+        self.cursors[1] = resize;
+        self.cursors[2] = move;
+
+        _ = x.XDefineCursor(self.display, self.root, move.cursor);
     }
 
     fn deinit_cursors(self: *Self) void {
-        for (self.cursors) |*cursor| {
-            cursor.deinit();
+        for (self.cursors) |cursor| {
+            self.allocator.destroy(cursor);
         }
     }
 
@@ -147,6 +145,11 @@ pub const WM = struct {
                 _ = x.XMapWindow(self.display, self.root);
                 _ = x.XMapWindow(self.display, casted.window);
                 _ = x.XSetWindowBorderWidth(self.display, casted.window, 10);
+
+                var attr: x.XWindowAttributes = .{};
+
+                _ = x.XGetWindowAttributes(self.display, self.root, &attr);
+                _ = x.XMoveResizeWindow(self.display, casted.window, 0, 0, @intCast(attr.width), @intCast(attr.height));
             },
             x.MapNotify => {
                 const casted = @as(*x.XKeyPressedEvent, @ptrCast(event));
