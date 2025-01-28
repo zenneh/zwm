@@ -53,9 +53,6 @@ pub const WM = struct {
 
         try self.setup_inputs();
 
-        // const cursor = x.XCreateFontCursor(self.display, 68);
-        // _ = x.XDefineCursor(self.display, self.root, cursor);
-        //
         self.init_cursors() catch return Error.Cursor;
         defer self.deinit_cursors();
 
