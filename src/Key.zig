@@ -13,6 +13,24 @@ pub const Modifier = packed struct(u8) {
     mod3: bool = false, // Rarely used
     mod4: bool = false, // Usually mapped to Super/Windows key
     mod5: bool = false, // Usually mapped to ScrollLock/Mode_switch
+
+    pub fn shift() Modifier {
+        return Modifier{
+            .shift = true,
+        };
+    }
+
+    pub fn control() Modifier {
+        return Modifier{
+            .control = true,
+        };
+    }
+
+    pub fn mod4() Modifier {
+        return Modifier{
+            .mod4 = true,
+        };
+    }
 };
 
 pub const Action = fn (void) void;

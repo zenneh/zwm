@@ -3,6 +3,8 @@ const x = @import("X11.zig").x;
 const stderr = std.io.getStdErr().writer();
 
 const Cursor = @import("Cursor.zig");
+const Window = @import("Window.zig");
+const Workspace = @import("Workspace.zig");
 
 const Alloc = std.mem.Allocator;
 
@@ -28,6 +30,9 @@ pub const WM = struct {
     running: bool = true,
     cursors: [3]*const Cursor,
 
+    // All the Application windows
+    windows: std.SinglyLinkedList(Window),
+
     pub fn init(allocator: *const Alloc) WM {
         return WM{
             .display = undefined,
@@ -35,6 +40,7 @@ pub const WM = struct {
             .root = undefined,
             .cursors = undefined,
             .allocator = allocator,
+            .windows = .{},
         };
     }
 
@@ -131,10 +137,29 @@ pub const WM = struct {
             x.ButtonPress => {
                 const casted = @as(*x.XButtonPressedEvent, @ptrCast(event));
                 std.log.info("Button Pressed: {b:0>8}", .{casted.button});
+
+                // try toggle window
             },
             x.KeyPress => {
                 const casted = @as(*x.XKeyPressedEvent, @ptrCast(event));
-                std.log.info("Key Pressed: {b:0>8}", .{casted.keycode});
+                std.log.info("Key Pressed: {d} options: {d} {d}", .{ casted.keycode, x.XK_i, x.XK_o });
+
+                const i_keycode = x.XKeysymToKeycode(self.display, x.XK_i);
+                const o_keycode = x.XKeysymToKeycode(self.display, x.XK_o);
+
+                if (casted.keycode == i_keycode) {
+                    std.log.info("unmap window", .{});
+
+                    if (self.windows.first) |node| {
+                        _ = x.XUnmapWindow(self.display, node.data.window);
+                    }
+                }
+                if (casted.keycode == o_keycode) {
+                    std.log.info("map window", .{});
+                    if (self.windows.first) |node| {
+                        _ = x.XMapWindow(self.display, node.data.window);
+                    }
+                }
             },
             x.MapRequest => {
                 std.log.info("maprequst", .{});
@@ -146,7 +171,21 @@ pub const WM = struct {
                 var attr: x.XWindowAttributes = .{};
 
                 _ = x.XGetWindowAttributes(self.display, self.root, &attr);
-                _ = x.XMoveResizeWindow(self.display, casted.window, 0, 0, @intCast(attr.width), @intCast(attr.height));
+
+                const window = Window{
+                    .window = casted.window,
+                    .x = 0,
+                    .y = 0,
+                    .width = @intCast(attr.width),
+                    .height = @intCast(attr.height),
+                };
+
+                const T = std.SinglyLinkedList(Window);
+
+                const node: *T.Node = self.allocator.create(T.Node) catch unreachable;
+                node.* = .{ .data = window };
+                self.windows.prepend(node);
+                // _ = x.XMoveResizeWindow(self.display, casted.window, 0, 0, @intCast(attr.width), @intCast(attr.height));
             },
             x.MapNotify => {
                 const casted = @as(*x.XKeyPressedEvent, @ptrCast(event));
