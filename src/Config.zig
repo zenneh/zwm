@@ -1,19 +1,8 @@
-const Key = @import("Key.zig");
+// const Key = @import("Key.zig");
+const plugin = @import("plugin.zig");
 
-const Config = @This();
+pub const CONFIG = @This(){};
 
 tags: u8 = 9, // Amount of tags DEFAULT 9
-shortcuts: []Key.Shortcut,
-
-pub fn default() Config {
-    return Config{
-        .tags = 9,
-        .shortcuts = [_].{
-            .{
-                .modifier = Key.Modifier.shift(),
-                .key = 20,
-                .action = &void,
-            },
-        },
-    };
-}
+// shortcuts: []const Key.Shortcut = &[_]Key.Shortcut{},
+plugins: []const plugin.EventHandler = &[_]plugin.EventHandler{},

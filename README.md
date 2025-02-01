@@ -13,3 +13,5 @@ A based window manager made using zig.
 - Window: Managing application windows
 - Workspace: Managing the layouts and constraints per workspace
 - WM: Main window manager class that will do the work
+- EventHandler: Sends events to the correct handlers
+- 

@@ -1,4 +1,4 @@
-const x = @import("X11.zig").x;
+const x = @import("X11.zig");
 const Alloc = @import("std").mem.Allocator;
 
 const Type = enum(u8) {

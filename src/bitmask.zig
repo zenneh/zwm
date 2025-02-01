@@ -1,7 +1,7 @@
 const std = @import("std");
 const print = std.debug.print;
 
-fn Mask(comptime T: type) type {
+pub fn Mask(comptime T: type) type {
     // Only allow unsigned integers for a bitmask
     if (@typeInfo(T) != .Int or @typeInfo(T).Int.signedness != .unsigned) {
         @compileError("Mask type must be an unsigned integer");

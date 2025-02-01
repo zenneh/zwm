@@ -1,7 +1,8 @@
-const std = @import("std");
-const x = @cImport(@cInclude("X11/Xlib.h")); // X11 library
+const Config = @import("Config.zig");
+const WindowManager = @import("WindowManager.zig");
 
-const wm = @import("wm.zig");
+const x = @import("X11.zig");
+const std = @import("std");
 
 const print = std.debug.print;
 
@@ -35,34 +36,16 @@ fn handle_keypress(event: *x.XEvent) void {
     }
 }
 
-fn handle_button(event: *x.XButtonPressedEvent) void {
-    print("button pressed {} {}", .{ event.button, event.state });
-}
-
-const Arg = union(enum) {
-    s: *const []u8,
-    f: f32,
-    i: i32,
-};
-
-const Shortcut = struct {
-    modifier: i8,
-    key: i8,
-    handler: *fn (...) void,
-    args: []Arg,
-};
-
-const shortcuts: []Shortcut = .{.{
-    .modifier = 10,
-}};
-
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const config = comptime Config{};
 
-    var manager = wm.WM.init(&gpa.allocator());
-    defer manager.deinit();
+    var wm = WindowManager.wima(&config){};
+    wm.a = 30;
 
-    manager.start() catch {
-        std.log.err("Hey we got some issues man\n", .{});
-    };
+    // var wm = WindowManager.init(&config);
+    // defer wm.deinit();
+
+    // wm.start() catch {
+    //     std.log.err("Hey we got some issues man\n", .{});
+    // };
 }

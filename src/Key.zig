@@ -1,6 +1,4 @@
-const x = @cImport({
-    @cInclude("X11/Xlib.h");
-});
+const x = @import("X11.zig");
 
 const Self = @This();
 

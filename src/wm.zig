@@ -1,5 +1,5 @@
 const std = @import("std");
-const x = @import("X11.zig").x;
+const x = @import("X11.zig");
 const stderr = std.io.getStdErr().writer();
 
 const Cursor = @import("Cursor.zig");
@@ -132,6 +132,14 @@ pub const WM = struct {
         std.log.err("X11 error: {}\n", .{event.*});
     }
 
+    fn list_windows(self: *Self) void {
+        var window = self.windows.first;
+        while (window) |w| {
+            std.debug.print("Window {d}\n", .{w.data.window});
+            window = w.next;
+        }
+    }
+
     fn handle_event(self: *Self, event: [*c]x.XEvent) void {
         switch (event.*.type) {
             x.ButtonPress => {
@@ -146,6 +154,7 @@ pub const WM = struct {
 
                 const i_keycode = x.XKeysymToKeycode(self.display, x.XK_i);
                 const o_keycode = x.XKeysymToKeycode(self.display, x.XK_o);
+                const l_keycode = x.XKeysymToKeycode(self.display, x.XK_l);
 
                 if (casted.keycode == i_keycode) {
                     std.log.info("unmap window", .{});
@@ -159,6 +168,15 @@ pub const WM = struct {
                     if (self.windows.first) |node| {
                         _ = x.XMapWindow(self.display, node.data.window);
                     }
+                }
+                if (casted.keycode == o_keycode) {
+                    std.log.info("map window", .{});
+                    if (self.windows.first) |node| {
+                        _ = x.XMapWindow(self.display, node.data.window);
+                    }
+                }
+                if (casted.keycode == l_keycode) {
+                    self.list_windows();
                 }
             },
             x.MapRequest => {
