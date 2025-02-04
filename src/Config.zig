@@ -1,8 +1,32 @@
 // const Key = @import("Key.zig");
-const plugin = @import("plugin.zig");
+const x = @import("X11.zig");
+const std = @import("std");
+const WM = @import("WindowManager.zig");
 
-pub const CONFIG = @This(){};
+// Handlers
+const handlers = @import("handlers.zig");
 
-tags: u8 = 9, // Amount of tags DEFAULT 9
-// shortcuts: []const Key.Shortcut = &[_]Key.Shortcut{},
-plugins: []const plugin.EventHandler = &[_]plugin.EventHandler{},
+handlers: []const WM.HandlerEntry,
+shortcuts: []const type,
+
+fn ballz() void {}
+
+pub const Default = @This(){
+    .handlers = &[_]WM.HandlerEntry{
+        .{
+            .event = x.MapRequest,
+            .handlers = &[_]WM.Handler{
+                handlers.mapRequest,
+            },
+        },
+        .{
+            .event = x.KeyPress,
+            .handlers = &[_]WM.Handler{
+                handlers.keyPress,
+            },
+        },
+    },
+    .shortcuts = &[_]type{
+        WM.ActionEntry(0, x.XK_t, ballz, .{}),
+    },
+};

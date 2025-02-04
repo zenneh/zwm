@@ -217,4 +217,8 @@ pub const WM = struct {
             },
         }
     }
+
+    fn ballz() void {
+        std.debug.print("niggertrrrr\n", .{});
+    }
 };

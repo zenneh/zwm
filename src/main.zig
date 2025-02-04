@@ -37,15 +37,12 @@ fn handle_keypress(event: *x.XEvent) void {
 }
 
 pub fn main() !void {
-    const config = comptime Config{};
+    var alloc = std.heap.GeneralPurposeAllocator(.{}){};
 
-    var wm = WindowManager.wima(&config){};
-    wm.a = 30;
+    var wm = WindowManager.init(alloc.allocator(), &Config.Default);
+    defer wm.deinit();
 
-    // var wm = WindowManager.init(&config);
-    // defer wm.deinit();
-
-    // wm.start() catch {
-    //     std.log.err("Hey we got some issues man\n", .{});
-    // };
+    wm.start() catch {
+        std.log.err("Hey we got some issues man\n", .{});
+    };
 }

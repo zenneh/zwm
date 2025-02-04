@@ -5,7 +5,7 @@ const x = @import("X11.zig");
 const EventPtr = [*c]x.XEvent;
 
 // A plugin is a function that gets called on an specific x11 event
-pub const Plugin: type = *const fn (*WM, EventPtr) void;
+pub const Plugin: type = *const fn (*anyopaque, EventPtr) void;
 
 // Define the plugin configuration struct type at module scope
 
@@ -26,7 +26,7 @@ pub fn PluginManager(comptime configs: []const EventHandler) type {
             break :blk map;
         };
 
-        pub fn send(wm: *WM, event: EventPtr) void {
+        pub fn send(_: *Self, wm: *anyopaque, event: EventPtr) void {
             const event_type: usize = @intCast(event.*.type);
             for (handlers[event_type]) |handler| {
                 handler(wm, @ptrCast(event));
