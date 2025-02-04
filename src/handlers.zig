@@ -35,7 +35,6 @@ pub fn mapRequest(wm: *WM, event: *const x.XEvent) void {
     wm.windows.prepend(node);
 
     node.data.map(wm.display);
-    node.data.selectInput(wm.display);
 }
 
 pub fn mapNotify(_: *WM, event: *const x.XMapEvent) void {

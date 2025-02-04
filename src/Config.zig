@@ -9,7 +9,9 @@ const handlers = @import("handlers.zig");
 handlers: []const WM.HandlerEntry,
 shortcuts: []const type,
 
-fn ballz() void {}
+fn ballz() void {
+    std.debug.print("Ballzzz\n", .{});
+}
 
 pub const Default = @This(){
     .handlers = &[_]WM.HandlerEntry{

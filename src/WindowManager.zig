@@ -4,6 +4,7 @@ const window = @import("Window.zig");
 const layout = @import("layout.zig");
 const plugin = @import("plugin.zig");
 const util = @import("util.zig");
+const Workspace = @import("Workspace.zig");
 
 const std = @import("std");
 const Alloc = std.mem.Allocator;
@@ -45,10 +46,6 @@ pub fn ActionEntry(
     const F = @TypeOf(func);
     const ArgsTuple = std.meta.ArgsTuple(F);
     const ProvidedArgs = @TypeOf(args);
-    @compileLog("Function type:", F);
-    @compileLog("Args tuple type:", ArgsTuple);
-    @compileLog("Provided args type:", @TypeOf(args));
-
     comptime {
         const expected_fields = @typeInfo(ArgsTuple).Struct.fields;
         const provided_fields = @typeInfo(ProvidedArgs).Struct.fields;
@@ -66,19 +63,9 @@ pub fn ActionEntry(
     return struct {
         pub const mod = modifier;
         pub const keycode = key;
-        pub const action = Action(F){
-            .func = func,
-            .args = args,
-        };
 
-        pub fn invoke() @typeInfo(F).Fn.return_type.? {
-            // For functions with no arguments, call directly
-            if (@typeInfo(F).Fn.params.len == 0) {
-                return action.func();
-            } else {
-                // For functions with arguments
-                return @call(.auto, action.func, action.args);
-            }
+        pub fn invoke() void {
+            @call(.auto, func, args);
         }
     };
 }
@@ -110,6 +97,7 @@ screen: c_int,
 windows: WindowList,
 handlers: [x.LASTEvent][]const LocalHandler,
 shortcut_dispatcher: *const fn (*WM, *const x.XKeyEvent) void,
+workspaces: [NUM_WORKSPACES]Workspace,
 
 pub fn init(alloc: Alloc, comptime config: *const Config) WM {
     return .{

@@ -23,12 +23,5 @@ pub fn Window(comptime T: type) type {
         pub fn unmap(self: *Self, display: *x.Display) void {
             _ = x.XUnmapWindow(display, self.window);
         }
-
-        pub fn selectInput(self: *Self, display: *x.Display) void {
-            const result = x.XSelectInput(display, self.window, WM.EVENT_MASK);
-            if (result == 0) {
-                debug.print("Failed to select input\n", .{});
-            }
-        }
     };
 }

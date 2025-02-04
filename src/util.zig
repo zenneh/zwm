@@ -2,6 +2,7 @@
 // since zig doesn't support a nice syntax for this like in C.
 const WM = @import("WindowManager.zig");
 const x = @import("X11.zig");
+const std = @import("std");
 
 pub fn createHandlers(comptime handlers: []const WM.HandlerEntry) [x.LASTEvent][]const WM.LocalHandler {
     return comptime blk: {
@@ -42,9 +43,12 @@ pub fn createHandlers(comptime handlers: []const WM.HandlerEntry) [x.LASTEvent][
 
 pub fn handleKeyPress(comptime shortcuts: []const type) fn (*WM, *const x.XKeyEvent) void {
     return struct {
-        pub fn handle(_: *WM, casted: *const x.XKeyEvent) void {
+        pub fn handle(wm: *WM, casted: *const x.XKeyEvent) void {
             inline for (shortcuts) |shortcut| {
-                if (casted.state == shortcut.mod and casted.keycode == shortcut.keycode) {
+                const keysym = x.XKeycodeToKeysym(wm.display, @intCast(casted.keycode), 0);
+                std.debug.print("Shortcut mask: {} keycode: {} keysym: {} casted: {}\n", .{ shortcut.mod, shortcut.keycode, keysym, casted.keycode });
+
+                if (casted.state == shortcut.mod and keysym == shortcut.keycode) {
                     shortcut.invoke();
                 }
             }
