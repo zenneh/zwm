@@ -3,6 +3,7 @@ const x = @import("X11.zig");
 
 const std = @import("std");
 const debug = std.debug;
+const action = @import("action.zig");
 
 pub fn getWindow(windows: *WM.WindowList, window_id: c_ulong) ?*WM.Window {
     var current = windows.first;
@@ -35,6 +36,9 @@ pub fn mapRequest(wm: *WM, event: *const x.XEvent) void {
     wm.windows.prepend(node);
 
     node.data.map(wm.display);
+
+    wm.current_window = &node.data;
+    action.tag(wm, wm.current_workspace);
 }
 
 pub fn mapNotify(_: *WM, event: *const x.XMapEvent) void {
@@ -47,8 +51,7 @@ pub fn enterNotify(_: *WM, event: *const x.XEnterWindowEvent) void {
 
 pub fn keyPress(wm: *WM, event: *const x.XEvent) void {
     const casted = @as(*const x.XKeyPressedEvent, @ptrCast(event));
-    debug.print("KeyPress: window={X}, keycode={}, state={b}\n", .{ casted.window, casted.keycode, casted.state });
-    // const keysym = x.XKeycodeToKeysym(wm.display, @as(x.KeyCode, @truncate(casted.keycode)), 0);
+    // debug.print("KeyPress: window={X}, keycode={}, state={b}\n", .{ casted.window, casted.keycode, casted.state });
     wm.shortcut_dispatcher(wm, casted);
 }
 

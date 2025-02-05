@@ -29,47 +29,6 @@ pub const HandlerEntry = struct {
     handlers: []const Handler,
 };
 
-fn Action(comptime F: type) type {
-    return struct {
-        func: F,
-        args: std.meta.ArgsTuple(F),
-    };
-}
-
-// Helper to create an action entry with type checking
-pub fn ActionEntry(
-    comptime modifier: u8,
-    comptime key: u8,
-    comptime func: anytype,
-    comptime args: anytype,
-) type {
-    const F = @TypeOf(func);
-    const ArgsTuple = std.meta.ArgsTuple(F);
-    const ProvidedArgs = @TypeOf(args);
-    comptime {
-        const expected_fields = @typeInfo(ArgsTuple).Struct.fields;
-        const provided_fields = @typeInfo(ProvidedArgs).Struct.fields;
-
-        if (expected_fields.len != provided_fields.len) {
-            @compileError(std.fmt.comptimePrint("Wrong number of arguments. Expected {d} arguments, got {d}", .{ expected_fields, provided_fields }));
-        }
-        for (expected_fields, provided_fields) |exp, prov| {
-            if (exp.type != prov.type) {
-                @compileError(std.fmt.comptimePrint("Type mismatch for argument {s}. Expected {}, got {}", .{ exp.name, exp.type, prov.type }));
-            }
-        }
-    }
-
-    return struct {
-        pub const mod = modifier;
-        pub const keycode = key;
-
-        pub fn invoke() void {
-            @call(.auto, func, args);
-        }
-    };
-}
-
 pub const LocalHandler = *const fn (wm: *WM, event: *const x.XEvent) void;
 
 pub const Error = error{
@@ -98,6 +57,8 @@ windows: WindowList,
 handlers: [x.LASTEvent][]const LocalHandler,
 shortcut_dispatcher: *const fn (*WM, *const x.XKeyEvent) void,
 workspaces: [NUM_WORKSPACES]Workspace,
+current_workspace: u8 = 0,
+current_window: ?*Window = null,
 
 pub fn init(alloc: Alloc, comptime config: *const Config) WM {
     return .{
@@ -110,6 +71,13 @@ pub fn init(alloc: Alloc, comptime config: *const Config) WM {
         .windows = .{},
         .handlers = comptime util.createHandlers(config.handlers),
         .shortcut_dispatcher = comptime util.handleKeyPress(config.shortcuts),
+        .workspaces = init: {
+            var ws: [NUM_WORKSPACES]Workspace = undefined;
+            for (0..NUM_WORKSPACES) |i| {
+                ws[i] = Workspace.init(alloc, config.default_layout);
+            }
+            break :init ws;
+        },
     };
 }
 
@@ -185,5 +153,15 @@ fn handleEvent(self: *WM, event: [*c]x.XEvent) void {
     const event_index: usize = @intCast(event.*.type);
     for (self.handlers[event_index]) |handler| {
         handler(self, @ptrCast(event));
+    }
+}
+
+pub fn check(self: *WM) void {
+    std.debug.print("Called from keyboard shortcut\n", .{});
+    for (&self.workspaces, 0..) |*workspace, i| {
+        std.debug.print("Workspace {}: \n", .{i});
+        for (workspace.windows.items) |w| {
+            std.debug.print("\twindow {}:{b}\n", .{ w.window, w.mask.mask });
+        }
     }
 }
