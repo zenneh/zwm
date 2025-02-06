@@ -11,7 +11,7 @@ const handlers = @import("handlers.zig");
 
 default_layout: Layouts,
 handlers: []const WM.HandlerEntry,
-shortcuts: []const type,
+shortcuts: []const action.CallableShortcut,
 
 pub const Default = @This(){
     .default_layout = Layouts.monocle,
@@ -28,22 +28,32 @@ pub const Default = @This(){
                 handlers.keyPress,
             },
         },
+        .{
+            .event = x.DestroyNotify,
+            .handlers = &[_]WM.Handler{
+                handlers.keyPress,
+            },
+        },
     },
-    .shortcuts = &[_]type{
+    .shortcuts = &[_]action.CallableShortcut{
         // Tag window
-        action.ActionEntry(x.ShiftMask, x.XK_1, action.tag, .{@as(u8, 0)}),
-        action.ActionEntry(x.ShiftMask, x.XK_2, action.tag, .{@as(u8, 1)}),
-        action.ActionEntry(x.ShiftMask, x.XK_3, action.tag, .{@as(u8, 2)}),
-        action.ActionEntry(x.ShiftMask, x.XK_4, action.tag, .{@as(u8, 3)}),
+        action.Shortcut(x.ShiftMask, x.XK_1, action.tag, .{@as(u8, 0)}),
+        action.Shortcut(x.ShiftMask, x.XK_2, action.tag, .{@as(u8, 1)}),
+        action.Shortcut(x.ShiftMask, x.XK_3, action.tag, .{@as(u8, 2)}),
+        action.Shortcut(x.ShiftMask, x.XK_4, action.tag, .{@as(u8, 3)}),
 
         // View workspace
-        action.ActionEntry(0, x.XK_1, action.view, .{@as(u8, 0)}),
-        action.ActionEntry(0, x.XK_2, action.view, .{@as(u8, 1)}),
-        action.ActionEntry(0, x.XK_3, action.view, .{@as(u8, 2)}),
-        action.ActionEntry(0, x.XK_4, action.view, .{@as(u8, 3)}),
-        action.ActionEntry(0, x.XK_t, action.check, .{}),
+        action.Shortcut(0, x.XK_1, action.view, .{@as(u8, 0)}),
+        action.Shortcut(0, x.XK_2, action.view, .{@as(u8, 1)}),
+        action.Shortcut(0, x.XK_3, action.view, .{@as(u8, 2)}),
+        action.Shortcut(0, x.XK_4, action.view, .{@as(u8, 3)}),
+        action.Shortcut(0, x.XK_t, action.check, .{}),
+
+        // Navigation
+        action.Shortcut(0, x.XK_l, action.focusNext, .{}),
+        action.Shortcut(0, x.XK_h, action.focusPrev, .{}),
 
         // Change layout
-        action.ActionEntry(0, x.XK_t, action.setLayout, .{Layouts.monocle}),
+        action.Shortcut(0, x.XK_t, action.setLayout, .{Layouts.monocle}),
     },
 };

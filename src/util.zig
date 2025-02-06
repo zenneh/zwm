@@ -3,6 +3,7 @@
 const WM = @import("WindowManager.zig");
 const x = @import("X11.zig");
 const std = @import("std");
+const action = @import("action.zig");
 
 pub fn createHandlers(comptime handlers: []const WM.HandlerEntry) [x.LASTEvent][]const WM.LocalHandler {
     return comptime blk: {
@@ -38,7 +39,7 @@ pub fn createHandlers(comptime handlers: []const WM.HandlerEntry) [x.LASTEvent][
     };
 }
 
-pub fn handleKeyPress(comptime shortcuts: []const type) fn (*WM, *const x.XKeyEvent) void {
+pub fn handleKeyPress(comptime shortcuts: []const action.CallableShortcut) fn (*WM, *const x.XKeyEvent) void {
     return struct {
         pub fn handle(wm: *WM, casted: *const x.XKeyEvent) void {
             inline for (shortcuts) |shortcut| {
@@ -51,4 +52,24 @@ pub fn handleKeyPress(comptime shortcuts: []const type) fn (*WM, *const x.XKeyEv
             }
         }
     }.handle;
+}
+
+pub fn getWindow(windows: *WM.WindowList, window_id: c_ulong) ?*WM.Window {
+    var current = windows.first;
+    while (current) |node| {
+        if (node.data.window == window_id) return &node.data;
+        current = node.next;
+    }
+
+    return null;
+}
+
+pub fn getWindowNode(windows: *WM.WindowList, window_id: c_ulong) ?*WM.WindowList.Node {
+    var current = windows.first;
+    while (current) |node| {
+        if (node.data.window == window_id) return &node;
+        current = node.next;
+    }
+
+    return null;
 }

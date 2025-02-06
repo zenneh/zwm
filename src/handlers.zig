@@ -4,40 +4,13 @@ const x = @import("X11.zig");
 const std = @import("std");
 const debug = std.debug;
 const action = @import("action.zig");
-
-pub fn getWindow(windows: *WM.WindowList, window_id: c_ulong) ?*WM.Window {
-    var current = windows.first;
-    while (current) |node| {
-        if (node.data.window == window_id) return &node.data;
-        current = node.next;
-    }
-
-    return null;
-}
+const util = @import("util.zig");
 
 pub fn mapRequest(wm: *WM, event: *const x.XEvent) void {
-    const e = @as(*const x.XMapRequestEvent, @ptrCast(event));
-    debug.print("MapRequest: window={X}, parent={X}\n", .{ e.window, e.parent });
+    const casted = @as(*const x.XMapRequestEvent, @ptrCast(event));
+    debug.print("MapRequest: window={X}, parent={X}\n", .{ casted.window, casted.parent });
 
-    if (getWindow(&wm.windows, e.window)) |window| {
-        window.map(wm.display);
-        return;
-    }
-
-    const w = WM.Window{
-        .window = e.window,
-    };
-
-    const node = wm.alloc.create(WM.WindowList.Node) catch unreachable;
-    node.* = WM.WindowList.Node{
-        .data = w,
-    };
-
-    wm.windows.prepend(node);
-
-    node.data.map(wm.display);
-
-    wm.current_window = &node.data;
+    action.createWindow(wm, casted.window);
     action.tag(wm, wm.current_workspace);
 }
 
@@ -58,4 +31,9 @@ pub fn keyPress(wm: *WM, event: *const x.XEvent) void {
 pub fn buttonPress(_: *WM, _: *const x.XButtonEvent) void {
     // const casted = @as(*const x.button, @ptrCast(event));
     // debug.print("ButtonPress: window={X}, button={}, state={b}, x={}, y={}\n", .{ event.window, event.button, event.state, event.x, event.y });
+}
+
+pub fn destroyNotify(wm: *WM, event: *const x.XEvent) void {
+    const casted = @as(*const x.XDestroyWindowEvent, @ptrCast(event));
+    action.destroyWindow(wm, casted.window);
 }

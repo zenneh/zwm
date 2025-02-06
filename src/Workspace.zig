@@ -1,52 +1,114 @@
-const Window = @import("WindowManager.zig").Window;
-const x = @import("X11.zig");
+const Alignment = @import("layout.zig").Alignment;
 const Alloc = std.mem.Allocator;
 const Layout = @import("layout.zig").Layout;
 const Layouts = @import("layout.zig").Layouts;
+const Window = @import("WindowManager.zig").Window;
 
 const std = @import("std");
+const util = @import("util.zig");
+const x = @import("X11.zig");
 
 const Self = @This();
-const WindowList = std.ArrayList(*Window);
+const WindowList = std.DoublyLinkedList(*Window);
 
+alloc: Alloc,
 layout: Layout,
 windows: WindowList,
+active_window: ?*WindowList.Node,
 
 pub fn init(alloc: Alloc, comptime layout: Layouts) Self {
     return .{
+        .alloc = alloc,
         .layout = layout.asLayout(),
-        .windows = WindowList.init(alloc),
+        .windows = WindowList{},
+        .active_window = null,
     };
 }
 
-pub fn tag(self: *Self, window: *Window) void {
-    for (self.windows.items) |w| {
-        if (window == w) return;
+pub fn deinit(self: *Self) void {
+    var current = self.windows.first;
+    while (current) |node| {
+        current = node.next;
+        self.alloc.destroy(node);
     }
-
-    self.windows.append(window) catch return;
 }
 
-pub fn untag(self: *Self, window: *Window) void {
-    for (self.windows.items, 0..) |w, index| {
-        if (window == w) {
-            _ = self.windows.swapRemove(index);
-            return;
-        }
+pub fn tag(self: *Self, window_node: *Window) void {
+    var it = self.windows.first;
+    while (it) |node| : (it = node.next) {
+        if (node.data == window_node) return;
+    }
+
+    const node = self.alloc.create(WindowList.Node) catch return;
+    node.* = .{
+        .data = window_node,
+        .next = null,
+        .prev = null,
+    };
+
+    self.windows.append(node);
+    self.active_window = node;
+}
+
+pub fn untag(self: *Self, window_node: *Window) void {
+    var it = self.windows.first;
+    while (it) |node| : (it = node.next) {
+        if (node.data != window_node) continue;
+        self.windows.remove(node);
+        self.alloc.destroy(node);
+        self.active_window = self.windows.first;
+        break;
     }
 }
 
 pub fn mapAll(self: *Self, display: *x.Display) void {
-    for (self.windows.items) |window| {
-        window.map(display);
-    }
-}
-pub fn unmapAll(self: *Self, display: *x.Display) void {
-    for (self.windows.items) |window| {
-        window.unmap(display);
+    var it = self.windows.first;
+    while (it) |node| : (it = node.next) {
+        node.data.map(display);
     }
 }
 
-pub fn arrange(self: *Self, display: *x.Display) void {
-    self.layout.arrange(self.windows.items, display);
+pub fn unmapAll(self: *Self, display: *x.Display) void {
+    var it = self.windows.first;
+    while (it) |node| : (it = node.next) {
+        node.data.unmap(display);
+    }
+}
+
+pub fn arrange(self: *Self, alignment: *const Alignment, display: *x.Display) void {
+    var window_count: usize = 0;
+    var it = self.windows.first;
+    while (it) |_| : (it = it.?.next) {
+        window_count += 1;
+    }
+
+    var windows = self.alloc.alloc(*Window, window_count) catch return;
+    defer self.alloc.free(windows);
+
+    var i: usize = 0;
+    it = self.windows.first;
+    while (it) |node| : ({
+        it = node.next;
+        i += 1;
+    }) {
+        windows[i] = node.data;
+    }
+
+    self.layout.arrange(windows, alignment, display);
+}
+
+pub fn focusNext(self: *Self) void {
+    if (self.active_window) |current| {
+        self.active_window = if (current.next) |next| next else self.windows.first;
+    } else {
+        self.active_window = self.windows.first;
+    }
+}
+
+pub fn focusPrev(self: *Self) void {
+    if (self.active_window) |current| {
+        self.active_window = if (current.prev) |prev| prev else self.windows.last;
+    } else {
+        self.active_window = self.windows.last;
+    }
 }

@@ -18,12 +18,12 @@ pub const Layout = struct {
     vtable: *const VTable,
 
     const VTable = struct {
-        arrange: *const fn (windows: []*Window, display: *x.Display) void,
+        arrange: *const fn (windows: []*Window, alignment: *const Alignment, display: *x.Display) void,
         center: ?*const fn () void = null,
     };
 
-    pub fn arrange(self: Layout, windows: []*Window, display: *x.Display) void {
-        self.vtable.arrange(windows, display);
+    pub fn arrange(self: Layout, windows: []*Window, alignment: *const Alignment, display: *x.Display) void {
+        self.vtable.arrange(windows, alignment, display);
     }
 
     pub fn center(self: Layout) void {
@@ -41,13 +41,9 @@ pub const Monocle = struct {
         };
     }
 
-    fn arrange(windows: []*Window, display: *x.Display) void {
+    fn arrange(windows: []*Window, alignment: *const Alignment, display: *x.Display) void {
         for (windows) |window| {
-            window.*.alignment = Alignment{
-                .pos = .{ .x = 0, .y = 0 },
-                .width = 1000,
-                .height = 1000,
-            };
+            window.*.alignment = alignment.*;
             window.arrange(display);
         }
     }

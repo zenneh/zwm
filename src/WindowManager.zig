@@ -22,7 +22,7 @@ pub const NUM_WORKSPACES = @typeInfo(BITMASK).Int.bits;
 pub const NUM_CURSORS = 3;
 
 pub const Window = window.Window(BITMASK);
-pub const WindowList = std.SinglyLinkedList(Window);
+pub const WindowList = std.DoublyLinkedList(Window);
 pub const Handler = *const fn (wm: *WM, event: *const x.XEvent) void;
 pub const HandlerEntry = struct {
     event: c_int,
@@ -47,7 +47,7 @@ fn xErrorHandler(_: ?*x.Display, event: [*c]x.XErrorEvent) callconv(.C) c_int {
     return 0;
 }
 
-root: x.Window,
+root: Window,
 alloc: Alloc,
 display: *x.Display,
 config: *const Config,
@@ -58,7 +58,6 @@ handlers: [x.LASTEvent][]const LocalHandler,
 shortcut_dispatcher: *const fn (*WM, *const x.XKeyEvent) void,
 workspaces: [NUM_WORKSPACES]Workspace,
 current_workspace: u8 = 0,
-current_window: ?*Window = null,
 
 pub fn init(alloc: Alloc, comptime config: *const Config) WM {
     return .{
@@ -95,6 +94,8 @@ pub fn start(self: *WM) Error!void {
     self.initError();
     defer self.deinitError();
 
+    self.grabKeys();
+
     self.running = true;
 
     _ = x.XSync(self.display, x.False);
@@ -120,19 +121,47 @@ fn closeDisplay(self: *WM) void {
 // Screen
 fn initScreen(self: *WM) void {
     self.screen = x.XDefaultScreen(self.display);
-    self.root = x.XRootWindow(self.display, self.screen);
+    const x11_window = x.XRootWindow(self.display, self.screen);
+    self.root = Window.fromX11Window(x11_window);
+    self.root.updateAlignment(self.display);
 }
 
 fn deinitScreen(_: *WM) void {}
 
 // Inputs
 fn initInputs(self: *WM) Error!void {
-    const result = x.XSelectInput(self.display, self.root, EVENT_MASK);
+    const result = x.XSelectInput(self.display, self.root.window, EVENT_MASK);
 
     if (result == 0) {
         std.log.err("Failed to become window manager (another WM running?)\n", .{});
         return Error.AlreadyRunningWM;
     }
+}
+
+fn grabKeys(wm: *WM) void {
+    var s: c_int = 0;
+    var e: c_int = 0;
+    var skip: c_int = 0;
+
+    var syms: ?[*c]x.KeySym = undefined;
+
+    _ = x.XUngrabKey(wm.display, x.AnyKey, x.AnyModifier, wm.root.window);
+    _ = x.XDisplayKeycodes(wm.display, &s, &e);
+
+    syms = x.XGetKeyboardMapping(wm.display, @intCast(s), e - s + 1, &skip);
+
+    var k: c_int = s;
+    if (syms == null) return;
+
+    while (k <= e) : (k += 1) {
+        for (wm.config.shortcuts) |shortcut| {
+            if (shortcut.keycode == syms.?[@intCast((k - s) * skip)]) {
+                _ = x.XGrabKey(wm.display, k, shortcut.mod, wm.root.window, x.True, x.GrabModeAsync, x.GrabModeAsync);
+            }
+        }
+    }
+
+    _ = x.XFree(@ptrCast(syms));
 }
 
 // Error handling
@@ -157,11 +186,18 @@ fn handleEvent(self: *WM, event: [*c]x.XEvent) void {
 }
 
 pub fn check(self: *WM) void {
-    std.debug.print("Called from keyboard shortcut\n", .{});
+    // Root window
+
+    std.debug.print("root window {}:{b}\n", .{ self.root.window, self.root.mask.mask });
+    std.debug.print("\troot alignment: x:{}, y:{}, width:{}, height:{}\n", .{ self.root.alignment.pos.x, self.root.alignment.pos.y, self.root.alignment.width, self.root.alignment.height });
     for (&self.workspaces, 0..) |*workspace, i| {
-        std.debug.print("Workspace {}: \n", .{i});
-        for (workspace.windows.items) |w| {
+        std.debug.print("Workspace {}: {} windows\n", .{ i, workspace.windows.len });
+        var it = workspace.windows.first;
+        while (it) |node| : (it = node.next) {
+            const w = node.data;
             std.debug.print("\twindow {}:{b}\n", .{ w.window, w.mask.mask });
+            std.debug.print("\t\talignment: x:{}, y:{}, width:{}, height:{}\n", .{ w.alignment.pos.x, w.alignment.pos.y, w.alignment.width, w.alignment.height });
+            std.debug.print("\t\tAlignment: {any}", .{w.alignment});
         }
     }
 }
