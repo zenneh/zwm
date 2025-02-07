@@ -5,6 +5,7 @@ const WM = @import("WindowManager.zig");
 const action = @import("action.zig");
 const Layout = @import("layout.zig").Layout;
 const Layouts = @import("layout.zig").Layouts;
+const cmd = @import("util.zig").cmd;
 
 // Handlers
 const handlers = @import("handlers.zig");
@@ -20,6 +21,12 @@ pub const Default = @This(){
             .event = x.MapRequest,
             .handlers = &[_]WM.Handler{
                 handlers.mapRequest,
+            },
+        },
+        .{
+            .event = x.MappingNotify,
+            .handlers = &[_]WM.Handler{
+                handlers.mapNotify,
             },
         },
         .{
@@ -55,5 +62,9 @@ pub const Default = @This(){
 
         // Change layout
         action.Shortcut(0, x.XK_t, action.setLayout, .{Layouts.monocle}),
+
+        // Processes
+        action.Shortcut(x.ShiftMask, x.XK_g, action.process, .{cmd("st")}),
+        action.Shortcut(x.ShiftMask, x.XK_f, action.process, .{cmd("firefox")}),
     },
 };

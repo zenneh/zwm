@@ -4,6 +4,8 @@ const WM = @import("WindowManager.zig");
 const x = @import("X11.zig");
 const std = @import("std");
 const action = @import("action.zig");
+const Alloc = std.mem.Allocator;
+const process = std.process;
 
 pub fn createHandlers(comptime handlers: []const WM.HandlerEntry) [x.LASTEvent][]const WM.LocalHandler {
     return comptime blk: {
@@ -72,4 +74,21 @@ pub fn getWindowNode(windows: *WM.WindowList, window_id: c_ulong) ?*WM.WindowLis
     }
 
     return null;
+}
+
+pub fn spawn_process(env: ?*const process.EnvMap, argv: []const []const u8, allocator: Alloc) !void {
+    var child = process.Child.init(argv, allocator);
+
+    child.env_map = env;
+
+    child.stdin_behavior = .Ignore;
+    child.stdout_behavior = .Pipe;
+    child.stderr_behavior = .Pipe;
+
+    try child.spawn();
+}
+
+// Create a command string
+pub fn cmd(comptime command: []const u8) []const []const u8 {
+    return &[_][]const u8{command};
 }

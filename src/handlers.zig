@@ -11,11 +11,18 @@ pub fn mapRequest(wm: *WM, event: *const x.XEvent) void {
     debug.print("MapRequest: window={X}, parent={X}\n", .{ casted.window, casted.parent });
 
     action.createWindow(wm, casted.window);
-    action.tag(wm, wm.current_workspace);
+    // action.tag(wm, wm.current_workspace);
+    action.view(wm, wm.current_workspace);
 }
 
-pub fn mapNotify(_: *WM, event: *const x.XMapEvent) void {
-    debug.print("MapNotify: window={X}, event={X}, override_redirect={}\n", .{ event.window, event.event, event.override_redirect });
+pub fn mapNotify(wm: *WM, event: *const x.XEvent) void {
+    const casted = @as(*const x.XMappingEvent, @ptrCast(event));
+    debug.print("MapNotify: window={X}\n", .{casted.window});
+
+    _ = x.XRefreshKeyboardMapping(@constCast(casted));
+    if (casted.request == x.MappingKeyboard) {
+        wm.grabKeys();
+    }
 }
 
 pub fn enterNotify(_: *WM, event: *const x.XEnterWindowEvent) void {
@@ -24,7 +31,7 @@ pub fn enterNotify(_: *WM, event: *const x.XEnterWindowEvent) void {
 
 pub fn keyPress(wm: *WM, event: *const x.XEvent) void {
     const casted = @as(*const x.XKeyPressedEvent, @ptrCast(event));
-    // debug.print("KeyPress: window={X}, keycode={}, state={b}\n", .{ casted.window, casted.keycode, casted.state });
+    debug.print("KeyPress: window={X}, keycode={}, state={b}\n", .{ casted.window, casted.keycode, casted.state });
     wm.shortcut_dispatcher(wm, casted);
 }
 

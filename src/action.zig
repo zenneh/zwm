@@ -64,34 +64,33 @@ pub fn Shortcut(
 }
 
 pub fn view(wm: *WM, index: u8) void {
-    if (wm.current_workspace == index) return;
+    const prev = &wm.workspaces[wm.current_workspace];
+    prev.unmapAll(wm.display);
 
-    wm.workspaces[wm.current_workspace].unmapAll(wm.display);
-    wm.workspaces[index].mapAll(wm.display);
-    wm.workspaces[index].arrange(&wm.root.alignment, wm.display);
+    const current = &wm.workspaces[index];
+    current.mapAll(wm.display);
+    current.arrange(&wm.root.alignment, wm.display);
+
     wm.current_workspace = index;
 }
 
 pub fn tag(wm: *WM, index: u8) void {
-    const workspace = &wm.workspaces[wm.current_workspace];
-    const workspace_window = workspace.active_window;
+    const prev = &wm.workspaces[wm.current_workspace];
+    const workspace_window = prev.active_window;
 
     if (workspace_window) |node| {
-        std.debug.print("Trying to tag window: {d}", .{node.data.window});
-        workspace.unmapAll(wm.display);
+        const window_ptr = node.data;
+
+        std.debug.print("Trying to tag window: {d} to {d}\n", .{ node.data.window, index });
+        std.debug.print("Node: {*}\n", .{node});
+        prev.unmapAll(wm.display);
 
         for (&wm.workspaces) |*other| {
-            other.untag(node.data);
+            other.untag(window_ptr);
         }
 
-        node.data.mask.clear();
-        node.data.mask.tag(index) catch unreachable; // TODO
-        workspace.tag(node.data);
-
-        workspace.arrange(&wm.root.alignment, wm.display);
-        workspace.mapAll(wm.display);
-
-        std.debug.print("Tagged window: {}", .{node.data.window});
+        const current = &wm.workspaces[index];
+        current.tag(window_ptr);
     }
 }
 
@@ -102,15 +101,26 @@ pub fn check(wm: *WM) void {
 }
 
 pub fn setLayout(wm: *WM, layout: Layout.Layouts) void {
-    wm.workspaces[wm.current_workspace].layout = layout.asLayout();
+    const workspace = &wm.workspaces[wm.current_workspace];
+    workspace.layout = layout.asLayout();
 }
 
 pub fn focusNext(wm: *WM) void {
-    wm.workspaces[wm.current_workspace].focusNext();
+    const workspace = &wm.workspaces[wm.current_workspace];
+    workspace.focusNext();
+
+    if (workspace.active_window) |node| {
+        node.data.focus(wm.display);
+    }
 }
 
 pub fn focusPrev(wm: *WM) void {
-    wm.workspaces[wm.current_workspace].focusPrev();
+    const workspace = &wm.workspaces[wm.current_workspace];
+    workspace.focusPrev();
+
+    if (workspace.active_window) |node| {
+        node.data.focus(wm.display);
+    }
 }
 
 pub fn createWindow(wm: *WM, x11_window: x11.Window) void {
@@ -123,6 +133,9 @@ pub fn createWindow(wm: *WM, x11_window: x11.Window) void {
     };
 
     wm.windows.append(node);
+
+    const workspace = &wm.workspaces[wm.current_workspace];
+    workspace.tag(&node.data);
 }
 
 pub fn destroyWindow(wm: *WM, x11_window: x11.Window) void {
@@ -137,4 +150,15 @@ pub fn destroyWindow(wm: *WM, x11_window: x11.Window) void {
         wm.alloc.destroy(item);
         break;
     }
+}
+
+pub fn process(wm: *WM, comptime args: []const []const u8) void {
+    const display = std.mem.span(x11.DisplayString(wm.display));
+
+    var env_map = std.process.EnvMap.init(std.heap.c_allocator);
+    defer env_map.deinit();
+
+    env_map.put("DISPLAY", display) catch return;
+
+    util.spawn_process(&env_map, args, wm.alloc) catch return;
 }

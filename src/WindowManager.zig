@@ -16,7 +16,7 @@ const WM = @This();
 
 var CURRENT: ?*WM = null;
 
-pub const EVENT_MASK = x.SubstructureRedirectMask | x.SubstructureNotifyMask | x.ButtonPressMask | x.KeyPressMask | x.EnterWindowMask | x.FocusChangeMask | x.EnterWindowMask;
+pub const EVENT_MASK = x.SubstructureRedirectMask | x.SubstructureNotifyMask | x.ButtonPressMask | x.KeyPressMask | x.EnterWindowMask | x.LeaveWindowMask | x.FocusChangeMask | x.PropertyChangeMask | x.StructureNotifyMask;
 pub const BITMASK = u9;
 pub const NUM_WORKSPACES = @typeInfo(BITMASK).Int.bits;
 pub const NUM_CURSORS = 3;
@@ -80,7 +80,11 @@ pub fn init(alloc: Alloc, comptime config: *const Config) WM {
     };
 }
 
-pub fn deinit(_: *WM) void {}
+pub fn deinit(self: *WM) void {
+    for (&self.workspaces) |*workspace| {
+        workspace.deinit();
+    }
+}
 
 pub fn start(self: *WM) Error!void {
     try self.openDisplay();
@@ -138,7 +142,7 @@ fn initInputs(self: *WM) Error!void {
     }
 }
 
-fn grabKeys(wm: *WM) void {
+pub fn grabKeys(wm: *WM) void {
     var s: c_int = 0;
     var e: c_int = 0;
     var skip: c_int = 0;

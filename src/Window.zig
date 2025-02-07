@@ -28,12 +28,14 @@ pub fn Window(comptime T: type) type {
             _ = x11.XMoveResizeWindow(display, self.window, self.alignment.pos.x, self.alignment.pos.y, self.alignment.width, self.alignment.height);
         }
 
-        pub fn highlight(self: *const Self, display: *x11.Display) void {
+        pub fn focus(self: *const Self, display: *x11.Display) void {
+            _ = x11.XSetInputFocus(display, self.window, x11.RevertToPointerRoot, x11.CurrentTime);
+            _ = x11.XRaiseWindow(display, self.window);
             _ = x11.XSetWindowBorderWidth(display, self.window, 1);
             _ = x11.XSetWindowBorder(display, self.window, 0x00_FF_00_00);
         }
 
-        pub fn unhighlight(self: *const Self, display: *x11.Display) void {
+        pub fn unfocus(self: *const Self, display: *x11.Display) void {
             _ = x11.XSetWindowBorderWidth(display, self.window, 0);
             _ = x11.XSetWindowBorder(display, self.window, 0x00_00_00_00);
         }

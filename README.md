@@ -15,3 +15,8 @@ A based window manager made using zig.
 - WM: Main window manager class that will do the work
 - EventHandler: Sends events to the correct handlers
 - 
+
+### TODO
+- Handle action errors
+- Custom logging
+- Make keyboard shortcuts better by updating the Key.zig file.

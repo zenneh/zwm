@@ -39,7 +39,7 @@ pub fn tag(self: *Self, window_node: *Window) void {
         if (node.data == window_node) return;
     }
 
-    const node = self.alloc.create(WindowList.Node) catch return;
+    const node = self.alloc.create(WindowList.Node) catch unreachable;
     node.* = .{
         .data = window_node,
         .next = null,
@@ -51,12 +51,17 @@ pub fn tag(self: *Self, window_node: *Window) void {
 }
 
 pub fn untag(self: *Self, window_node: *Window) void {
-    var it = self.windows.first;
-    while (it) |node| : (it = node.next) {
+    var current = self.windows.first;
+    while (current) |node| : (current = node.next) {
         if (node.data != window_node) continue;
         self.windows.remove(node);
+
+        if (node == self.active_window) {
+            self.active_window = if (node.next) |next| next else self.windows.first;
+        }
+
         self.alloc.destroy(node);
-        self.active_window = self.windows.first;
+
         break;
     }
 }
@@ -95,6 +100,10 @@ pub fn arrange(self: *Self, alignment: *const Alignment, display: *x.Display) vo
     }
 
     self.layout.arrange(windows, alignment, display);
+
+    if (self.active_window) |node| {
+        node.data.focus(display);
+    }
 }
 
 pub fn focusNext(self: *Self) void {
