@@ -58,5 +58,9 @@ pub fn Window(comptime T: type) type {
         pub fn destroy(self: *Self, display: *x11.Display) void {
             _ = x11.XDestroyWindow(display, self.window);
         }
+
+        pub fn setMode(self: *Self, mode: Mode) void {
+            self.mode = mode;
+        }
     };
 }

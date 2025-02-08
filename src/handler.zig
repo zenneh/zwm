@@ -18,6 +18,7 @@ pub fn mapRequest(wm: *WM, event: *const x.XEvent) void {
     debug.print("MapRequest: window={X}, parent={X}\n", .{ casted.window, casted.parent });
 
     action.createWindow(wm, casted.window);
+    action.focusPrev(wm);
     action.view(wm, wm.current_workspace);
 }
 
