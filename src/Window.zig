@@ -32,12 +32,12 @@ pub fn Window(comptime T: type) type {
             _ = x11.XSetInputFocus(display, self.window, x11.RevertToPointerRoot, x11.CurrentTime);
             _ = x11.XRaiseWindow(display, self.window);
             _ = x11.XSetWindowBorderWidth(display, self.window, 1);
-            _ = x11.XSetWindowBorder(display, self.window, 0x00_FF_00_00);
+            _ = x11.XSetWindowBorder(display, self.window, 0x00_00_00_88);
         }
 
         pub fn unfocus(self: *const Self, display: *x11.Display) void {
-            _ = x11.XSetWindowBorderWidth(display, self.window, 0);
-            _ = x11.XSetWindowBorder(display, self.window, 0x00_00_00_00);
+            _ = x11.XSetWindowBorderWidth(display, self.window, 1);
+            _ = x11.XSetWindowBorder(display, self.window, 0x00_00_00_55);
         }
 
         pub fn fromX11Window(window: x11.Window) Self {
@@ -53,6 +53,10 @@ pub fn Window(comptime T: type) type {
             self.alignment.pos = .{ .x = @intCast(attr.x), .y = @intCast(attr.y) };
             self.alignment.width = @intCast(attr.width);
             self.alignment.height = @intCast(attr.height);
+        }
+
+        pub fn destroy(self: *Self, display: *x11.Display) void {
+            _ = x11.XDestroyWindow(display, self.window);
         }
     };
 }

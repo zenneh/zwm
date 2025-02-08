@@ -20,3 +20,4 @@ A based window manager made using zig.
 - Handle action errors
 - Custom logging
 - Make keyboard shortcuts better by updating the Key.zig file.
+- Floating windows + layout

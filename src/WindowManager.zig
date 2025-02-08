@@ -6,6 +6,8 @@ const plugin = @import("plugin.zig");
 const util = @import("util.zig");
 const Workspace = @import("Workspace.zig");
 
+const handler = @import("handler.zig");
+
 const std = @import("std");
 const Alloc = std.mem.Allocator;
 const debug = std.debug;
@@ -16,20 +18,13 @@ const WM = @This();
 
 var CURRENT: ?*WM = null;
 
-pub const EVENT_MASK = x.SubstructureRedirectMask | x.SubstructureNotifyMask | x.ButtonPressMask | x.KeyPressMask | x.EnterWindowMask | x.LeaveWindowMask | x.FocusChangeMask | x.PropertyChangeMask | x.StructureNotifyMask;
+pub const EVENT_MASK = x.SubstructureRedirectMask | x.SubstructureNotifyMask | x.ButtonPressMask | x.ButtonReleaseMask | x.KeyPressMask | x.EnterWindowMask | x.LeaveWindowMask | x.FocusChangeMask | x.PropertyChangeMask | x.StructureNotifyMask | x.PointerMotionMask;
 pub const BITMASK = u9;
 pub const NUM_WORKSPACES = @typeInfo(BITMASK).Int.bits;
 pub const NUM_CURSORS = 3;
 
 pub const Window = window.Window(BITMASK);
 pub const WindowList = std.DoublyLinkedList(Window);
-pub const Handler = *const fn (wm: *WM, event: *const x.XEvent) void;
-pub const HandlerEntry = struct {
-    event: c_int,
-    handlers: []const Handler,
-};
-
-pub const LocalHandler = *const fn (wm: *WM, event: *const x.XEvent) void;
 
 pub const Error = error{
     AlreadyRunningWM,
@@ -54,7 +49,7 @@ config: *const Config,
 running: bool,
 screen: c_int,
 windows: WindowList,
-handlers: [x.LASTEvent][]const LocalHandler,
+handlers: [x.LASTEvent][]const *const fn (*WM, *const x.XEvent) void,
 shortcut_dispatcher: *const fn (*WM, *const x.XKeyEvent) void,
 workspaces: [NUM_WORKSPACES]Workspace,
 current_workspace: u8 = 0,
@@ -73,7 +68,7 @@ pub fn init(alloc: Alloc, comptime config: *const Config) WM {
         .workspaces = init: {
             var ws: [NUM_WORKSPACES]Workspace = undefined;
             for (0..NUM_WORKSPACES) |i| {
-                ws[i] = Workspace.init(alloc, config.default_layout);
+                ws[i] = Workspace.init(alloc, config.layout);
             }
             break :init ws;
         },
@@ -184,8 +179,8 @@ fn handleError(_: *WM, err: *x.XErrorEvent) void {
 
 fn handleEvent(self: *WM, event: [*c]x.XEvent) void {
     const event_index: usize = @intCast(event.*.type);
-    for (self.handlers[event_index]) |handler| {
-        handler(self, @ptrCast(event));
+    for (self.handlers[event_index]) |f| {
+        f(self, @ptrCast(event));
     }
 }
 

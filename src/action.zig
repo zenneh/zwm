@@ -1,4 +1,4 @@
-const Layout = @import("layout.zig");
+const LayoutType = @import("layout.zig").Type;
 const WM = @import("WindowManager.zig");
 const std = @import("std");
 const util = @import("util.zig");
@@ -100,13 +100,12 @@ pub fn check(wm: *WM) void {
     wm.check();
 }
 
-pub fn setLayout(wm: *WM, layout: Layout.Layouts) void {
-    const workspace = &wm.workspaces[wm.current_workspace];
-    workspace.layout = layout.asLayout();
-}
-
 pub fn focusNext(wm: *WM) void {
     const workspace = &wm.workspaces[wm.current_workspace];
+
+    if (workspace.active_window) |node| {
+        node.data.unfocus(wm.display);
+    }
     workspace.focusNext();
 
     if (workspace.active_window) |node| {
@@ -116,6 +115,10 @@ pub fn focusNext(wm: *WM) void {
 
 pub fn focusPrev(wm: *WM) void {
     const workspace = &wm.workspaces[wm.current_workspace];
+
+    if (workspace.active_window) |node| {
+        node.data.unfocus(wm.display);
+    }
     workspace.focusPrev();
 
     if (workspace.active_window) |node| {
@@ -146,10 +149,39 @@ pub fn destroyWindow(wm: *WM, x11_window: x11.Window) void {
         for (&wm.workspaces) |*workspace| {
             workspace.untag(&item.data);
         }
+
         wm.windows.remove(item);
+        item.data.destroy(wm.display);
         wm.alloc.destroy(item);
         break;
     }
+}
+
+pub fn kill(wm: *WM) void {
+    const workspace = &wm.workspaces[wm.current_workspace];
+    const window = workspace.active_window orelse return;
+
+    var node = wm.windows.first;
+    while (node) |item| : (node = item.next) {
+        if (&item.data != window.data) continue;
+
+        for (&wm.workspaces) |*other| {
+            other.untag(&item.data);
+        }
+
+        wm.windows.remove(item);
+        item.data.destroy(wm.display);
+        wm.alloc.destroy(item);
+        break;
+    }
+
+    workspace.arrange(&wm.root.alignment, wm.display);
+}
+
+pub fn setLayout(wm: *WM, layout: LayoutType) void {
+    const workspace = &wm.workspaces[wm.current_workspace];
+    workspace.layout = layout.getLayout();
+    workspace.arrange(&wm.root.alignment, wm.display);
 }
 
 pub fn process(wm: *WM, comptime args: []const []const u8) void {
@@ -161,4 +193,16 @@ pub fn process(wm: *WM, comptime args: []const []const u8) void {
     env_map.put("DISPLAY", display) catch return;
 
     util.spawn_process(&env_map, args, wm.alloc) catch return;
+}
+
+pub fn incrementLayout(wm: *WM, amount: usize) void {
+    const workspace = &wm.workspaces[wm.current_workspace];
+    workspace.increment(amount);
+    workspace.arrange(&wm.root.alignment, wm.display);
+}
+
+pub fn decrementLayout(wm: *WM, amount: usize) void {
+    const workspace = &wm.workspaces[wm.current_workspace];
+    workspace.decrement(amount);
+    workspace.arrange(&wm.root.alignment, wm.display);
 }

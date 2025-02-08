@@ -1,8 +1,8 @@
 const Alignment = @import("layout.zig").Alignment;
 const Alloc = std.mem.Allocator;
-const Layout = @import("layout.zig").Layout;
-const Layouts = @import("layout.zig").Layouts;
 const Window = @import("WindowManager.zig").Window;
+const Layout = @import("layout.zig").Layout;
+const LayoutType = @import("layout.zig").Type;
 
 const std = @import("std");
 const util = @import("util.zig");
@@ -11,15 +11,17 @@ const x = @import("X11.zig");
 const Self = @This();
 const WindowList = std.DoublyLinkedList(*Window);
 
+index: usize,
 alloc: Alloc,
 layout: Layout,
 windows: WindowList,
 active_window: ?*WindowList.Node,
 
-pub fn init(alloc: Alloc, comptime layout: Layouts) Self {
+pub fn init(alloc: Alloc, comptime layout: LayoutType) Self {
     return .{
+        .index = @intCast(1),
         .alloc = alloc,
-        .layout = layout.asLayout(),
+        .layout = layout.getLayout(),
         .windows = WindowList{},
         .active_window = null,
     };
@@ -80,6 +82,10 @@ pub fn unmapAll(self: *Self, display: *x.Display) void {
     }
 }
 
+pub fn setLayout(self: *Self, layout: Layout) void {
+    self.layout = layout;
+}
+
 pub fn arrange(self: *Self, alignment: *const Alignment, display: *x.Display) void {
     var window_count: usize = 0;
     var it = self.windows.first;
@@ -99,7 +105,9 @@ pub fn arrange(self: *Self, alignment: *const Alignment, display: *x.Display) vo
         windows[i] = node.data;
     }
 
-    self.layout.arrange(windows, alignment, display);
+    self.layout.arrange(&.{
+        .index = self.index,
+    }, windows, alignment, display);
 
     if (self.active_window) |node| {
         node.data.focus(display);
@@ -120,4 +128,12 @@ pub fn focusPrev(self: *Self) void {
     } else {
         self.active_window = self.windows.last;
     }
+}
+
+pub fn increment(self: *Self, amount: usize) void {
+    self.index = @intCast((self.index +% amount) % self.windows.len);
+}
+
+pub fn decrement(self: *Self, amount: usize) void {
+    self.index = @intCast((self.index -% amount) % self.windows.len);
 }

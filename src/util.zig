@@ -6,29 +6,30 @@ const std = @import("std");
 const action = @import("action.zig");
 const Alloc = std.mem.Allocator;
 const process = std.process;
+const handler = @import("handler.zig");
 
-pub fn createHandlers(comptime handlers: []const WM.HandlerEntry) [x.LASTEvent][]const WM.LocalHandler {
+pub fn createHandlers(comptime handlers: []const handler.HandlerEntry) [x.LASTEvent][]const handler.Handler {
     return comptime blk: {
-        var result: [x.LASTEvent][]const WM.LocalHandler = undefined;
+        var result: [x.LASTEvent][]const handler.Handler = undefined;
         for (&result, 0..) |*slot, i| {
             var total_handlers: usize = 0;
-            for (handlers) |handler| {
-                if (@as(usize, @intCast(handler.event)) == i) {
-                    total_handlers += handler.handlers.len;
+            for (handlers) |h| {
+                if (@as(usize, @intCast(h.event)) == i) {
+                    total_handlers += h.handlers.len;
                 }
             }
             if (total_handlers == 0) {
-                slot.* = &[_]WM.LocalHandler{};
+                slot.* = &[_]handler.Handler{};
                 continue;
             }
 
             const static_handlers = blk2: {
-                var arr: [total_handlers]WM.LocalHandler = undefined;
+                var arr: [total_handlers]handler.Handler = undefined;
                 var pos: usize = 0;
-                for (handlers) |handler| {
-                    if (@as(usize, @intCast(handler.event)) == i) {
-                        for (handler.handlers) |h| {
-                            arr[pos] = h;
+                for (handlers) |h| {
+                    if (@as(usize, @intCast(h.event)) == i) {
+                        for (h.handlers) |k| {
+                            arr[pos] = k;
                             pos += 1;
                         }
                     }
