@@ -1,5 +1,6 @@
 const Layout = @import("layout.zig").Layout;
 const LayoutType = @import("layout.zig").Type;
+const Shortcut = @import("action.zig").Shortcut;
 const action = @import("action.zig");
 const cmd = @import("util.zig").cmd;
 const std = @import("std");
@@ -7,6 +8,8 @@ const x11 = @import("X11.zig");
 
 const handler = @import("handler.zig");
 const WM = @import("WindowManager.zig");
+
+const Config = @This();
 
 // Default Layout
 layout: LayoutType,
@@ -17,7 +20,7 @@ handlers: []const handler.HandlerEntry,
 // User defined keyboard shortcuts
 shortcuts: []const action.CallableShortcut,
 
-pub const Default = @This(){
+pub const Default = Config{
     .layout = LayoutType.monocle,
     .handlers = &[_]handler.HandlerEntry{
         .{
@@ -65,33 +68,33 @@ pub const Default = @This(){
     },
     .shortcuts = &[_]action.CallableShortcut{
         // Tag window
-        action.Shortcut(x11.ShiftMask, x11.XK_1, action.tag, .{@as(u8, 0)}),
-        action.Shortcut(x11.ShiftMask, x11.XK_2, action.tag, .{@as(u8, 1)}),
-        action.Shortcut(x11.ShiftMask, x11.XK_3, action.tag, .{@as(u8, 2)}),
-        action.Shortcut(x11.ShiftMask, x11.XK_4, action.tag, .{@as(u8, 3)}),
+        Shortcut(x11.ShiftMask, x11.XK_1, action.tag, .{@as(u8, 0)}),
+        Shortcut(x11.ShiftMask, x11.XK_2, action.tag, .{@as(u8, 1)}),
+        Shortcut(x11.ShiftMask, x11.XK_3, action.tag, .{@as(u8, 2)}),
+        Shortcut(x11.ShiftMask, x11.XK_4, action.tag, .{@as(u8, 3)}),
 
         // View workspace
-        action.Shortcut(0, x11.XK_1, action.view, .{@as(u8, 0)}),
-        action.Shortcut(0, x11.XK_2, action.view, .{@as(u8, 1)}),
-        action.Shortcut(0, x11.XK_3, action.view, .{@as(u8, 2)}),
-        action.Shortcut(0, x11.XK_4, action.view, .{@as(u8, 3)}),
-        action.Shortcut(0, x11.XK_t, action.check, .{}),
+        Shortcut(0, x11.XK_1, action.view, .{@as(u8, 0)}),
+        Shortcut(0, x11.XK_2, action.view, .{@as(u8, 1)}),
+        Shortcut(0, x11.XK_3, action.view, .{@as(u8, 2)}),
+        Shortcut(0, x11.XK_4, action.view, .{@as(u8, 3)}),
+        Shortcut(0, x11.XK_t, action.check, .{}),
 
         // Navigation
-        action.Shortcut(0, x11.XK_l, action.focusNext, .{}),
-        action.Shortcut(0, x11.XK_h, action.focusPrev, .{}),
+        Shortcut(0, x11.XK_l, action.focusNext, .{}),
+        Shortcut(0, x11.XK_h, action.focusPrev, .{}),
 
         // Change layout
-        action.Shortcut(x11.ShiftMask, x11.XK_m, action.setLayout, .{LayoutType.monocle}),
-        action.Shortcut(x11.ShiftMask, x11.XK_t, action.setLayout, .{LayoutType.tile}),
+        Shortcut(x11.ShiftMask, x11.XK_m, action.setLayout, .{LayoutType.monocle}),
+        Shortcut(x11.ShiftMask, x11.XK_t, action.setLayout, .{LayoutType.tile}),
         // action.Shortcut(x.ShiftMask, x.XK_b, action.setLayout, .{Layouts.bugo}),
-        action.Shortcut(x11.ShiftMask, x11.XK_i, action.incrementLayout, .{@as(usize, 1)}),
-        action.Shortcut(x11.ShiftMask, x11.XK_o, action.decrementLayout, .{@as(usize, 1)}),
+        Shortcut(x11.ShiftMask, x11.XK_i, action.incrementLayout, .{@as(usize, 1)}),
+        Shortcut(x11.ShiftMask, x11.XK_o, action.decrementLayout, .{@as(usize, 1)}),
 
         // Processes
-        action.Shortcut(x11.ShiftMask, x11.XK_g, action.process, .{cmd("st")}),
-        action.Shortcut(x11.ShiftMask, x11.XK_f, action.process, .{cmd("firefox")}),
+        Shortcut(x11.ShiftMask, x11.XK_g, action.process, .{cmd("st")}),
+        Shortcut(x11.ShiftMask, x11.XK_f, action.process, .{cmd("firefox")}),
 
-        action.Shortcut(x11.ShiftMask, x11.XK_q, action.kill, .{}),
+        Shortcut(x11.ShiftMask, x11.XK_q, action.kill, .{}),
     },
 };
