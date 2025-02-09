@@ -1,6 +1,28 @@
 const x = @import("X11.zig");
 
-const Self = @This();
+pub const Shift = Modifier{
+    .shift = true,
+};
+
+pub const Control = Modifier{
+    .control = true,
+};
+
+pub const ShiftMod = Modifier{
+    .shift = true,
+    .mod4 = true,
+};
+
+pub const ControlShift = Modifier{
+    .shift = true,
+    .mod4 = true,
+};
+
+pub const ControlShiftMod = Modifier{
+    .shift = true,
+    .control = true,
+    .mod4 = true,
+};
 
 pub const Modifier = packed struct(u8) {
     shift: bool = false,
@@ -11,30 +33,12 @@ pub const Modifier = packed struct(u8) {
     mod3: bool = false, // Rarely used
     mod4: bool = false, // Usually mapped to Super/Windows key
     mod5: bool = false, // Usually mapped to ScrollLock/Mode_switch
-
-    pub fn shift() Modifier {
-        return Modifier{
-            .shift = true,
-        };
-    }
-
-    pub fn control() Modifier {
-        return Modifier{
-            .control = true,
-        };
-    }
-
-    pub fn mod4() Modifier {
-        return Modifier{
-            .mod4 = true,
-        };
-    }
 };
 
 pub const Action = fn (void) void;
 
 pub const Shortcut = struct {
-    modifier: Modifier = .{},
+    modifier: u8 = .{},
     key: u8,
     action: Action,
 };

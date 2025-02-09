@@ -1,6 +1,6 @@
-const x = @import("X11.zig");
+const x11 = @import("X11.zig");
 const Config = @import("Config.zig");
-const window = @import("Window.zig");
+const Window = @import("Window.zig");
 const layout = @import("layout.zig");
 const plugin = @import("plugin.zig");
 const util = @import("util.zig");
@@ -9,21 +9,20 @@ const Workspace = @import("Workspace.zig");
 const handler = @import("handler.zig");
 
 const std = @import("std");
-const Alloc = std.mem.Allocator;
 const debug = std.debug;
 
 // Singleton instance for the error handler,
 // should not be fucked around with manually
-const WM = @This();
+const Self = @This();
 
-var CURRENT: ?*WM = null;
+var CURRENT: ?*Self = null;
 
-pub const EVENT_MASK = x.SubstructureRedirectMask | x.SubstructureNotifyMask | x.ButtonPressMask | x.ButtonReleaseMask | x.KeyPressMask | x.EnterWindowMask | x.LeaveWindowMask | x.FocusChangeMask | x.PropertyChangeMask | x.StructureNotifyMask | x.PointerMotionMask;
+pub const WM_EVENT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.KeyPressMask | x11.EnterWindowMask | x11.LeaveWindowMask | x11.FocusChangeMask | x11.PropertyChangeMask | x11.StructureNotifyMask | x11.PointerMotionMask;
+pub const WINDOW_EVENT_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
 pub const BITMASK = u9;
 pub const NUM_WORKSPACES = @typeInfo(BITMASK).Int.bits;
 pub const NUM_CURSORS = 3;
 
-pub const Window = window.Window(BITMASK);
 pub const WindowList = std.DoublyLinkedList(Window);
 
 pub const Error = error{
@@ -34,7 +33,7 @@ pub const Error = error{
 };
 
 // Global error handler for x11 reported errors
-fn xErrorHandler(_: ?*x.Display, event: [*c]x.XErrorEvent) callconv(.C) c_int {
+fn xErrorHandler(_: ?*x11.Display, event: [*c]x11.XErrorEvent) callconv(.C) c_int {
     if (CURRENT) |wm| {
         wm.handleError(event);
     }
@@ -43,45 +42,45 @@ fn xErrorHandler(_: ?*x.Display, event: [*c]x.XErrorEvent) callconv(.C) c_int {
 }
 
 root: Window,
-alloc: Alloc,
-display: *x.Display,
+allocator: std.mem.Allocator,
+display: *x11.Display,
 config: *const Config,
 running: bool,
 screen: c_int,
 windows: WindowList,
-handlers: [x.LASTEvent][]const *const fn (*WM, *const x.XEvent) void,
-shortcut_dispatcher: *const fn (*WM, *const x.XKeyEvent) void,
+handlers: [x11.LASTEvent][]const *const fn (*Self, *const x11.XEvent) void,
+shortcut_handler: *const fn (*Self, *const x11.XKeyEvent) void,
 workspaces: [NUM_WORKSPACES]Workspace,
 current_workspace: u8 = 0,
 
-pub fn init(alloc: Alloc, comptime config: *const Config) WM {
+pub fn init(allocator: std.mem.Allocator, comptime config: *const Config) Self {
     return .{
         .root = undefined,
-        .alloc = alloc,
+        .allocator = allocator,
         .running = false,
         .display = undefined,
         .screen = undefined,
         .config = config,
         .windows = .{},
         .handlers = comptime util.createHandlers(config.handlers),
-        .shortcut_dispatcher = comptime util.handleKeyPress(config.shortcuts),
+        .shortcut_handler = comptime util.createShortcutHandler(config.shortcuts),
         .workspaces = init: {
             var ws: [NUM_WORKSPACES]Workspace = undefined;
             for (0..NUM_WORKSPACES) |i| {
-                ws[i] = Workspace.init(alloc, config.layout);
+                ws[i] = Workspace.init(allocator);
             }
             break :init ws;
         },
     };
 }
 
-pub fn deinit(self: *WM) void {
+pub fn deinit(self: *Self) void {
     for (&self.workspaces) |*workspace| {
         workspace.deinit();
     }
 }
 
-pub fn start(self: *WM) Error!void {
+pub fn start(self: *Self) Error!void {
     try self.openDisplay();
     defer self.closeDisplay();
 
@@ -97,39 +96,39 @@ pub fn start(self: *WM) Error!void {
 
     self.running = true;
 
-    _ = x.XSync(self.display, x.False);
+    _ = x11.XSync(self.display, x11.False);
 
-    var event: x.XEvent = undefined;
+    var event: x11.XEvent = undefined;
     while (self.running) {
-        _ = x.XNextEvent(self.display, &event);
+        _ = x11.XNextEvent(self.display, &event);
         self.handleEvent(&event);
     }
 }
 
 // Display
-fn openDisplay(self: *WM) Error!void {
-    self.display = x.XOpenDisplay(null) orelse {
+fn openDisplay(self: *Self) Error!void {
+    self.display = x11.XOpenDisplay(null) orelse {
         return Error.DisplayConnectionFailed;
     };
 }
 
-fn closeDisplay(self: *WM) void {
-    _ = x.XCloseDisplay(self.display);
+fn closeDisplay(self: *Self) void {
+    _ = x11.XCloseDisplay(self.display);
 }
 
 // Screen
-fn initScreen(self: *WM) void {
-    self.screen = x.XDefaultScreen(self.display);
-    const x11_window = x.XRootWindow(self.display, self.screen);
-    self.root = Window.fromX11Window(x11_window);
-    self.root.updateAlignment(self.display);
+fn initScreen(self: *Self) void {
+    self.screen = x11.XDefaultScreen(self.display);
+    const x11_window = x11.XRootWindow(self.display, self.screen);
+    self.root = Window.init(x11_window);
+    self.root.updateAlignment(self.display) catch return;
 }
 
-fn deinitScreen(_: *WM) void {}
+fn deinitScreen(_: *Self) void {}
 
 // Inputs
-fn initInputs(self: *WM) Error!void {
-    const result = x.XSelectInput(self.display, self.root.window, EVENT_MASK);
+fn initInputs(self: *Self) Error!void {
+    const result = x11.XSelectInput(self.display, self.root.handle, WM_EVENT_MASK);
 
     if (result == 0) {
         std.log.err("Failed to become window manager (another WM running?)\n", .{});
@@ -137,66 +136,97 @@ fn initInputs(self: *WM) Error!void {
     }
 }
 
-pub fn grabKeys(wm: *WM) void {
+pub fn grabKeys(wm: *Self) void {
     var s: c_int = 0;
     var e: c_int = 0;
     var skip: c_int = 0;
 
-    var syms: ?[*c]x.KeySym = undefined;
+    var syms: ?[*c]x11.KeySym = undefined;
 
-    _ = x.XUngrabKey(wm.display, x.AnyKey, x.AnyModifier, wm.root.window);
-    _ = x.XDisplayKeycodes(wm.display, &s, &e);
+    _ = x11.XUngrabKey(wm.display, x11.AnyKey, x11.AnyModifier, wm.root.handle);
+    _ = x11.XDisplayKeycodes(wm.display, &s, &e);
 
-    syms = x.XGetKeyboardMapping(wm.display, @intCast(s), e - s + 1, &skip);
+    syms = x11.XGetKeyboardMapping(wm.display, @intCast(s), e - s + 1, &skip);
 
     var k: c_int = s;
     if (syms == null) return;
 
     while (k <= e) : (k += 1) {
         for (wm.config.shortcuts) |shortcut| {
-            if (shortcut.keycode == syms.?[@intCast((k - s) * skip)]) {
-                _ = x.XGrabKey(wm.display, k, shortcut.mod, wm.root.window, x.True, x.GrabModeAsync, x.GrabModeAsync);
+            if (shortcut.key == syms.?[@intCast((k - s) * skip)]) {
+                _ = x11.XGrabKey(wm.display, k, shortcut.mod, wm.root.handle, x11.True, x11.GrabModeAsync, x11.GrabModeAsync);
             }
         }
     }
 
-    _ = x.XFree(@ptrCast(syms));
+    _ = x11.XFree(@ptrCast(syms));
 }
 
 // Error handling
-fn initError(_: *WM) void {
-    _ = x.XSetErrorHandler(xErrorHandler);
+fn initError(_: *Self) void {
+    _ = x11.XSetErrorHandler(xErrorHandler);
 }
 
-fn deinitError(_: *WM) void {
-    _ = x.XSetErrorHandler(null);
+fn deinitError(_: *Self) void {
+    _ = x11.XSetErrorHandler(null);
 }
 
-fn handleError(_: *WM, err: *x.XErrorEvent) void {
+fn handleError(_: *Self, err: *x11.XErrorEvent) void {
     std.log.err("X11 Error: {d}", .{err.error_code});
     unreachable;
 }
 
-fn handleEvent(self: *WM, event: [*c]x.XEvent) void {
+fn handleEvent(self: *Self, event: [*c]x11.XEvent) void {
     const event_index: usize = @intCast(event.*.type);
     for (self.handlers[event_index]) |f| {
         f(self, @ptrCast(event));
     }
 }
 
-pub fn check(self: *WM) void {
-    // Root window
+pub fn currentWorkspace(self: *Self) *Workspace {
+    return &self.workspaces[self.current_workspace];
+}
 
-    std.debug.print("root window {}:{b}\n", .{ self.root.window, self.root.mask.mask });
-    std.debug.print("\troot alignment: x:{}, y:{}, width:{}, height:{}\n", .{ self.root.alignment.pos.x, self.root.alignment.pos.y, self.root.alignment.width, self.root.alignment.height });
-    for (&self.workspaces, 0..) |*workspace, i| {
-        std.debug.print("Workspace {}: {} windows\n", .{ i, workspace.windows.len });
-        var it = workspace.windows.first;
-        while (it) |node| : (it = node.next) {
-            const w = node.data;
-            std.debug.print("\twindow {}:{b}\n", .{ w.window, w.mask.mask });
-            std.debug.print("\t\talignment: x:{}, y:{}, width:{}, height:{}\n", .{ w.alignment.pos.x, w.alignment.pos.y, w.alignment.width, w.alignment.height });
-            std.debug.print("\t\tAlignment: {any}", .{w.alignment});
+fn getNodeByHandle(self: *Self, x11_window: x11.Window) ?*WindowList.Node {
+    var it = self.windows.first;
+    while (it) |node| : (it = node.next) {
+        if (node.data.handle == x11_window) return node;
+    }
+    return null;
+}
+
+pub fn createWindow(self: *Self, x11_window: x11.Window) !void {
+    if (self.getNodeByHandle(x11_window) != null) return;
+
+    const node = try self.allocator.create(WindowList.Node);
+    errdefer self.allocator.destroy(node);
+
+    const window = Window.init(x11_window);
+    try window.selectInput(self.display, WINDOW_EVENT_MASK);
+
+    node.* = WindowList.Node{
+        .data = window,
+        .next = null,
+        .prev = null,
+    };
+
+    node.data.selectInput(self.display, WINDOW_EVENT_MASK) catch unreachable;
+    node.data.map(self.display) catch unreachable;
+
+    self.windows.append(node);
+
+    try self.currentWorkspace().tagWindow(&node.data);
+    self.currentWorkspace().arrangeWindows(&self.root.alignment, self.display) catch unreachable;
+}
+
+pub fn destroyWindow(self: *Self, x11_window: x11.Window) !void {
+    if (self.getNodeByHandle(x11_window)) |node| {
+        for (&self.workspaces) |*workspace| {
+            workspace.untagWindow(&node.data) catch continue;
         }
+
+        self.windows.remove(node);
+        try node.data.destroy(self.display);
+        self.allocator.destroy(node);
     }
 }

@@ -1,27 +1,40 @@
 const Alignment = @import("layout.zig").Alignment;
-const Alloc = std.mem.Allocator;
-const Window = @import("WindowManager.zig").Window;
+const Window = @import("Window.zig");
 const Layout = @import("layout.zig").Layout;
+const layouts = @import("layout.zig").layouts;
 const LayoutType = @import("layout.zig").Type;
 
 const std = @import("std");
 const util = @import("util.zig");
-const x = @import("X11.zig");
+const x11 = @import("X11.zig");
 
-const Self = @This();
 const WindowList = std.DoublyLinkedList(*Window);
 
+pub const Error = error{
+    OutOfMemory,
+    WindowNotFound,
+    InvalidIndex,
+};
+
+const Self = @This();
+
+allocator: std.mem.Allocator,
+
+// How many windows allowed on the root
 index: usize,
-alloc: Alloc,
+
 layout: Layout,
+
+// List of window pointers active in this workspace
 windows: WindowList,
+
 active_window: ?*WindowList.Node,
 
-pub fn init(alloc: Alloc, comptime layout: LayoutType) Self {
+pub fn init(allocator: std.mem.Allocator) Self {
     return .{
-        .index = @intCast(1),
-        .alloc = alloc,
-        .layout = layout.getLayout(),
+        .index = 1,
+        .allocator = allocator,
+        .layout = layouts.monocle,
         .windows = WindowList{},
         .active_window = null,
     };
@@ -31,19 +44,18 @@ pub fn deinit(self: *Self) void {
     var current = self.windows.first;
     while (current) |node| {
         current = node.next;
-        self.alloc.destroy(node);
+        self.allocator.destroy(node);
     }
 }
 
-pub fn tag(self: *Self, window_node: *Window) void {
-    var it = self.windows.first;
-    while (it) |node| : (it = node.next) {
-        if (node.data == window_node) return;
-    }
+pub fn tagWindow(self: *Self, window: *Window) Error!void {
+    if (self.findWindowNode(window)) |_| return;
 
-    const node = self.alloc.create(WindowList.Node) catch unreachable;
+    const node = try self.allocator.create(std.DoublyLinkedList(*Window).Node);
+    errdefer self.allocator.destroy(node);
+
     node.* = .{
-        .data = window_node,
+        .data = window,
         .next = null,
         .prev = null,
     };
@@ -52,33 +64,28 @@ pub fn tag(self: *Self, window_node: *Window) void {
     self.active_window = node;
 }
 
-pub fn untag(self: *Self, window_node: *Window) void {
-    var current = self.windows.first;
-    while (current) |node| : (current = node.next) {
-        if (node.data != window_node) continue;
-        self.windows.remove(node);
+pub fn untagWindow(self: *Self, window: *Window) Error!void {
+    const node = self.findWindowNode(window) orelse return;
+    self.windows.remove(node);
 
-        if (node == self.active_window) {
-            self.active_window = if (node.next) |next| next else self.windows.first;
-        }
+    if (node == self.active_window) {
+        self.active_window = if (node.next) |next| next else self.windows.first;
+    }
 
-        self.alloc.destroy(node);
+    self.allocator.destroy(node);
+}
 
-        break;
+pub fn mapAllWindows(self: *Self, display: *x11.Display) void {
+    var it = self.windows.first;
+    while (it) |node| : (it = node.next) {
+        node.data.map(display) catch continue;
     }
 }
 
-pub fn mapAll(self: *Self, display: *x.Display) void {
+pub fn unmapAllWindows(self: *Self, display: *x11.Display) void {
     var it = self.windows.first;
     while (it) |node| : (it = node.next) {
-        node.data.map(display);
-    }
-}
-
-pub fn unmapAll(self: *Self, display: *x.Display) void {
-    var it = self.windows.first;
-    while (it) |node| : (it = node.next) {
-        node.data.unmap(display);
+        node.data.unmap(display) catch continue;
     }
 }
 
@@ -86,18 +93,12 @@ pub fn setLayout(self: *Self, layout: Layout) void {
     self.layout = layout;
 }
 
-pub fn arrange(self: *Self, alignment: *const Alignment, display: *x.Display) void {
-    var window_count: usize = 0;
-    var it = self.windows.first;
-    while (it) |_| : (it = it.?.next) {
-        window_count += 1;
-    }
-
-    var windows = self.alloc.alloc(*Window, window_count) catch return;
-    defer self.alloc.free(windows);
+pub fn arrangeWindows(self: *Self, alignment: *const Alignment, display: *x11.Display) Error!void {
+    var windows = try self.allocator.alloc(*Window, self.windows.len);
+    defer self.allocator.free(windows);
 
     var i: usize = 0;
-    it = self.windows.first;
+    var it = self.windows.first;
     while (it) |node| : ({
         it = node.next;
         i += 1;
@@ -110,11 +111,22 @@ pub fn arrange(self: *Self, alignment: *const Alignment, display: *x.Display) vo
     }, windows, alignment, display);
 
     if (self.active_window) |node| {
-        node.data.focus(display);
+        node.data.focus(display) catch return;
     }
 }
 
-pub fn focusNext(self: *Self) void {
+pub fn focusWindow(self: *Self, window: *Window, display: *x11.Display) void {
+    const found = self.findWindowNode(window) orelse return;
+
+    if (self.active_window) |current| {
+        current.data.unfocus(display);
+    }
+
+    self.active_window = found;
+    found.data.focus(display);
+}
+
+pub fn focusNextWindow(self: *Self) void {
     if (self.active_window) |current| {
         self.active_window = if (current.next) |next| next else self.windows.first;
     } else {
@@ -122,7 +134,8 @@ pub fn focusNext(self: *Self) void {
     }
 }
 
-pub fn focusPrev(self: *Self) void {
+/// Focus the previous window in sequence
+pub fn focusPrevWindow(self: *Self) void {
     if (self.active_window) |current| {
         self.active_window = if (current.prev) |prev| prev else self.windows.last;
     } else {
@@ -130,10 +143,22 @@ pub fn focusPrev(self: *Self) void {
     }
 }
 
-pub fn increment(self: *Self, amount: usize) void {
+pub fn incrementIndex(self: *Self, amount: usize) void {
     self.index = @intCast((self.index +% amount) % self.windows.len);
 }
 
-pub fn decrement(self: *Self, amount: usize) void {
+pub fn decrementIndex(self: *Self, amount: usize) void {
+    if (self.index == 0) {
+        self.index = self.windows.len;
+        return;
+    }
     self.index = @intCast((self.index -% amount) % self.windows.len);
+}
+
+fn findWindowNode(self: *Self, window: *Window) ?*std.DoublyLinkedList(*Window).Node {
+    var it = self.windows.first;
+    while (it) |node| : (it = node.next) {
+        if (node.data == window) return node;
+    }
+    return null;
 }

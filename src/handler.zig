@@ -15,36 +15,32 @@ pub const HandlerEntry = struct {
 
 pub fn mapRequest(wm: *WM, event: *const x.XEvent) void {
     const casted = @as(*const x.XMapRequestEvent, @ptrCast(event));
-    debug.print("MapRequest: window={X}, parent={X}\n", .{ casted.window, casted.parent });
-
-    action.createWindow(wm, casted.window);
-    action.focusPrev(wm);
-    action.view(wm, wm.current_workspace);
+    wm.createWindow(casted.window) catch return;
 }
 
 pub fn mapNotify(wm: *WM, event: *const x.XEvent) void {
     const casted = @as(*const x.XMappingEvent, @ptrCast(event));
-    debug.print("MapNotify: window={X}\n", .{casted.window});
-
     _ = x.XRefreshKeyboardMapping(@constCast(casted));
     if (casted.request == x.MappingKeyboard) {
         wm.grabKeys();
     }
 }
 
-pub fn enterNotify(_: *WM, event: *const x.XEnterWindowEvent) void {
-    debug.print("EnterNotify: window={X}, root={X}, x={}, y={}\n", .{ event.window, event.root, event.x, event.y });
+pub fn enterNotify(wm: *WM, event: *const x.XEvent) void {
+    const casted = @as(*const x.XEnterWindowEvent, @ptrCast(event));
+    action.focus(wm, casted.window);
 }
 
-pub fn motionNotify(_: *WM, event: *const x.XEvent) void {
+pub fn motionNotify(wm: *WM, event: *const x.XEvent) void {
     const casted = @as(*const x.XMotionEvent, @ptrCast(event));
-    debug.print("MotionNotify: window={X}, root={X}, x={}, y={}\n", .{ casted.window, casted.root, casted.x, casted.y });
+    // debug.print("MotionNotify: window={X}, root={X}, x={}, y={}\n", .{ casted.window, casted.root, casted.x, casted.y });
+    action.moveWindow(wm, @intCast(casted.x), @intCast(casted.y));
+    if ((casted.state & x.Button1MotionMask) > 0) {}
 }
 
 pub fn keyPress(wm: *WM, event: *const x.XEvent) void {
     const casted = @as(*const x.XKeyPressedEvent, @ptrCast(event));
-    debug.print("KeyPress: window={X}, keycode={}, state={b}\n", .{ casted.window, casted.keycode, casted.state });
-    wm.shortcut_dispatcher(wm, casted);
+    wm.shortcut_handler(wm, casted);
 }
 
 pub fn buttonPress(_: *WM, event: *const x.XEvent) void {

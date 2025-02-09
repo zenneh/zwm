@@ -1,5 +1,5 @@
 const WM = @import("WindowManager.zig");
-const Window = WM.Window;
+const Window = @import("Window.zig");
 const std = @import("std");
 const x = @import("X11.zig");
 const Alloc = std.mem.Allocator;
@@ -48,7 +48,7 @@ const Monocle = struct {
         _ = ctx;
         for (windows) |window| {
             window.*.alignment = alignment.*;
-            window.arrange(display);
+            window.arrange(display) catch unreachable;
         }
     }
 };
@@ -60,7 +60,7 @@ const Tile = struct {
         // Master window takes up left portion
         if (windows.len == 1) {
             windows[0].*.alignment = alignment.*;
-            windows[0].arrange(display);
+            windows[0].arrange(display) catch unreachable;
             return;
         }
 
@@ -78,7 +78,7 @@ const Tile = struct {
                     .width = alignment.width,
                     .height = @intCast(height),
                 };
-                window.arrange(display);
+                window.arrange(display) catch unreachable;
             }
             return;
         }
@@ -98,7 +98,7 @@ const Tile = struct {
                 .width = @intCast(width),
                 .height = @intCast(master_height),
             };
-            window.arrange(display);
+            window.arrange(display) catch unreachable;
         }
 
         // Child window
@@ -111,19 +111,7 @@ const Tile = struct {
                 .width = @intCast(width),
                 .height = @intCast(child_height),
             };
-            window.arrange(display);
+            window.arrange(display) catch unreachable;
         }
-    }
-};
-
-pub const Type = enum {
-    monocle,
-    tile,
-
-    pub fn getLayout(self: Type) Layout {
-        return switch (self) {
-            .monocle => layouts.monocle,
-            .tile => layouts.tile,
-        };
     }
 };

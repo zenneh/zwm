@@ -66,9 +66,11 @@ Configuration is handled through a simple configuration file in Config.zig.
 - [ ] Error handling improvements
 - [ ] Floating window support
 - [ ] Enhanced logging system
+- [ ] Enhance zig build file.
+- [ ] Codebase refactoring
 - [ ] Keyboard shortcut system refinement
 - [ ] Window restacking implementation
-- [ ] Codebase refactoring
+- [ ] Basic bar widget
 
 #### Long-term Goals
 
