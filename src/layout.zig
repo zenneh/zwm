@@ -5,8 +5,8 @@ const x = @import("X11.zig");
 const Alloc = std.mem.Allocator;
 
 pub const Pos = struct {
-    x: u16 = 0,
-    y: u16 = 0,
+    x: c_int = 0,
+    y: c_int = 0,
 };
 
 pub const Alignment = struct {
@@ -73,7 +73,7 @@ const Tile = struct {
                 window.alignment = .{
                     .pos = .{
                         .x = alignment.pos.x,
-                        .y = @intCast(alignment.pos.y + height * index),
+                        .y = alignment.pos.y + @as(c_int, @intCast(height * index)),
                     },
                     .width = alignment.width,
                     .height = @intCast(height),
@@ -93,7 +93,7 @@ const Tile = struct {
             window.alignment = .{
                 .pos = .{
                     .x = alignment.pos.x,
-                    .y = @intCast(alignment.pos.y + master_height * index),
+                    .y = alignment.pos.y + @as(c_int, @intCast(master_height * index)),
                 },
                 .width = @intCast(width),
                 .height = @intCast(master_height),
@@ -105,8 +105,8 @@ const Tile = struct {
         for (windows[master_amount..], 0..) |window, index| {
             window.alignment = .{
                 .pos = .{
-                    .x = @intCast(alignment.pos.x + width),
-                    .y = @intCast(alignment.pos.y + child_height * index),
+                    .x = alignment.pos.x + @as(c_int, @intCast(width)),
+                    .y = alignment.pos.y + @as(c_int, @intCast(child_height * index)),
                 },
                 .width = @intCast(width),
                 .height = @intCast(child_height),

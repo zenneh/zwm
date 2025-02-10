@@ -3,21 +3,21 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    zig.url = "github:mitchellh/zig-overlay";
+    zigpkgs.url = "github:mitchellh/zig-overlay";
   };
 
   outputs = {
     self,
     nixpkgs,
-    zig,
+    zigpkgs,
   }: let
     system = "x86_64-linux";
     pkgs = import nixpkgs {inherit system;};
-    zigpkgs = zig.packages.${system};
+    zig_master = zigpkgs.packages.${system}.master;
   in {
     devShells.${system}.default = pkgs.mkShell {
       packages = with pkgs; [
-        zigpkgs.master
+        zig
         zls
         xorg.libX11
         xorg.libX11.dev

@@ -2,7 +2,7 @@ const layouts = @import("layout.zig").layouts;
 const shortcut = @import("shortcut.zig");
 
 const Layout = @import("layout.zig").Layout;
-const KSC = shortcut.createShortCut;
+const SC = shortcut.createShortCut;
 
 const key = @import("Key.zig");
 const action = @import("action.zig");
@@ -64,39 +64,39 @@ pub const Default = Config{
     },
     .shortcuts = &[_]shortcut.Shortcut{
         // Tag window
-        KSC(ModLayer1, x11.XK_1, action.tag, .{@as(u8, 0)}),
-        KSC(ModLayer1, x11.XK_2, action.tag, .{@as(u8, 1)}),
-        KSC(ModLayer1, x11.XK_3, action.tag, .{@as(u8, 2)}),
-        KSC(ModLayer1, x11.XK_4, action.tag, .{@as(u8, 3)}),
-        KSC(ModLayer3, x11.XK_1, action.toggleTag, .{@as(u8, 0)}),
-        KSC(ModLayer3, x11.XK_2, action.toggleTag, .{@as(u8, 1)}),
-        KSC(ModLayer3, x11.XK_3, action.toggleTag, .{@as(u8, 2)}),
-        KSC(ModLayer3, x11.XK_4, action.toggleTag, .{@as(u8, 3)}),
+        SC(ModLayer1, x11.XK_1, action.tag, .{@as(u8, 0)}),
+        SC(ModLayer1, x11.XK_2, action.tag, .{@as(u8, 1)}),
+        SC(ModLayer1, x11.XK_3, action.tag, .{@as(u8, 2)}),
+        SC(ModLayer1, x11.XK_4, action.tag, .{@as(u8, 3)}),
+        SC(ModLayer3, x11.XK_1, action.toggleTag, .{@as(u8, 0)}),
+        SC(ModLayer3, x11.XK_2, action.toggleTag, .{@as(u8, 1)}),
+        SC(ModLayer3, x11.XK_3, action.toggleTag, .{@as(u8, 2)}),
+        SC(ModLayer3, x11.XK_4, action.toggleTag, .{@as(u8, 3)}),
 
         // View workspace
-        KSC(ModLayer0, x11.XK_1, action.view, .{@as(u8, 0)}),
-        KSC(ModLayer0, x11.XK_2, action.view, .{@as(u8, 1)}),
-        KSC(ModLayer0, x11.XK_3, action.view, .{@as(u8, 2)}),
-        KSC(ModLayer0, x11.XK_4, action.view, .{@as(u8, 3)}),
-        KSC(ModLayer0, x11.XK_c, action.check, .{}),
+        SC(ModLayer0, x11.XK_1, action.view, .{@as(u8, 0)}),
+        SC(ModLayer0, x11.XK_2, action.view, .{@as(u8, 1)}),
+        SC(ModLayer0, x11.XK_3, action.view, .{@as(u8, 2)}),
+        SC(ModLayer0, x11.XK_4, action.view, .{@as(u8, 3)}),
+        SC(ModLayer0, x11.XK_c, action.check, .{}),
 
         // Navigation
-        KSC(ModLayer0, x11.XK_n, action.focusNext, .{}),
-        KSC(ModLayer0, x11.XK_p, action.focusPrev, .{}),
+        SC(ModLayer0, x11.XK_n, action.focusNext, .{}),
+        SC(ModLayer0, x11.XK_p, action.focusPrev, .{}),
 
         // Workspace configuration
-        KSC(ModLayer0, x11.XK_m, action.setLayout, .{layouts.monocle}),
-        KSC(ModLayer0, x11.XK_t, action.setLayout, .{layouts.tile}),
-        KSC(ModLayer1, x11.XK_i, action.incrementLayout, .{@as(usize, 1)}),
-        KSC(ModLayer1, x11.XK_o, action.decrementLayout, .{@as(usize, 1)}),
+        SC(ModLayer0, x11.XK_m, action.setLayout, .{layouts.monocle}),
+        SC(ModLayer0, x11.XK_t, action.setLayout, .{layouts.tile}),
+        SC(ModLayer1, x11.XK_i, action.incrementLayout, .{@as(usize, 1)}),
+        SC(ModLayer1, x11.XK_o, action.decrementLayout, .{@as(usize, 1)}),
 
         // Window configuration
-        KSC(ModLayer1, x11.XK_p, action.toggleFloating, .{}),
+        SC(ModLayer1, x11.XK_p, action.toggleFloating, .{}),
 
         // Processes
-        KSC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
-        KSC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
+        SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
+        SC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
 
-        KSC(ModLayer0, x11.XK_q, action.kill, .{}),
+        SC(ModLayer0, x11.XK_q, action.kill, .{}),
     },
 };

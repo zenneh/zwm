@@ -15,6 +15,7 @@ pub fn setMode(wm: *WindowManager, mode: Window.Mode) void {
     const workspace = &wm.workspaces[wm.current_workspace];
     if (workspace.active_window) |node| {
         node.data.setMode(mode);
+        rearrangeWorkspace(wm);
     }
 }
 
@@ -22,9 +23,9 @@ pub fn toggleFloating(wm: *WindowManager) void {
     const workspace = &wm.workspaces[wm.current_workspace];
     if (workspace.active_window) |node| {
         if (node.data.mode == .floating) {
-            node.data.setMode(.default);
+            setMode(wm, .default);
         } else {
-            node.data.setMode(.floating);
+            setMode(wm, .floating);
         }
     }
 }
@@ -153,13 +154,23 @@ pub fn decrementLayout(wm: *WindowManager, amount: usize) void {
     workspace.arrangeWindows(&wm.root.alignment, wm.display) catch return;
 }
 
-pub fn moveWindow(wm: *WindowManager, x: u16, y: u16) void {
+pub fn moveWindow(wm: *WindowManager, x: c_int, y: c_int) void {
+    const state = &(wm.input_state orelse return);
     const workspace = &wm.workspaces[wm.current_workspace];
-    std.log.info("Trying to move window to {} {}", .{ x, y });
     if (workspace.active_window) |node| {
         if (node.data.mode != .floating) return;
-        node.data.alignment.pos = .{ .x = x, .y = y };
+        const dx = x - state.x;
+        const dy = y - state.y;
+        std.log.info("D: {} {}", .{ dx, dy });
+        const new_x = node.data.alignment.pos.x + dx;
+        const new_y = node.data.alignment.pos.y + dy;
+        std.log.info("Trying to move to: {} {}", .{ new_x, new_y });
+        node.data.alignment.pos.x = new_x;
+        node.data.alignment.pos.y = new_y;
         node.data.arrange(wm.display) catch return;
+
+        state.x += dx;
+        state.y += dy;
     }
 }
 

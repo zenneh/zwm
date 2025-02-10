@@ -11,17 +11,22 @@ const handler = @import("handler.zig");
 const std = @import("std");
 const debug = std.debug;
 
-// Singleton instance for the error handler,
-// should not be fucked around with manually
 const Self = @This();
 
+// Singleton instance for the error handler,
+// should not be fucked around with manually
 var CURRENT: ?*Self = null;
 
-pub const WM_EVENT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.KeyPressMask | x11.EnterWindowMask | x11.LeaveWindowMask | x11.FocusChangeMask | x11.PropertyChangeMask | x11.StructureNotifyMask | x11.PointerMotionMask;
+pub const WM_EVENT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.KeyPressMask | x11.EnterWindowMask | x11.LeaveWindowMask | x11.FocusChangeMask | x11.PropertyChangeMask | x11.StructureNotifyMask;
 pub const WINDOW_EVENT_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
 pub const BITMASK = u9;
-pub const NUM_WORKSPACES = @typeInfo(BITMASK).int.bits;
+pub const NUM_WORKSPACES = @typeInfo(BITMASK).Int.bits;
 pub const NUM_CURSORS = 3;
+
+const InputState = struct {
+    x: c_int,
+    y: c_int,
+};
 
 pub const WindowList = std.DoublyLinkedList(Window);
 
@@ -52,6 +57,7 @@ handlers: [x11.LASTEvent][]const *const fn (*Self, *const x11.XEvent) void,
 shortcut_handler: *const fn (*Self, *const x11.XKeyEvent) void,
 workspaces: [NUM_WORKSPACES]Workspace,
 current_workspace: u8 = 0,
+input_state: ?InputState,
 
 pub fn init(allocator: std.mem.Allocator, comptime config: *const Config) Self {
     return .{
@@ -71,6 +77,7 @@ pub fn init(allocator: std.mem.Allocator, comptime config: *const Config) Self {
             }
             break :init ws;
         },
+        .input_state = null,
     };
 }
 
@@ -98,6 +105,11 @@ pub fn start(self: *Self) Error!void {
     self.running = true;
 
     _ = x11.XSync(self.display, x11.False);
+    // 			XGrabButton(dpy, buttons[i].button,
+    // buttons[i].mask | modifiers[j],
+    // c->win, False, BUTTONMASK,
+    // GrabModeAsync, GrabModeSync, None, None);
+    _ = x11.XGrabButton(self.display, x11.Button1, x11.ShiftMask, self.root.handle, x11.False, x11.ButtonPressMask | x11.ButtonReleaseMask, x11.GrabModeAsync, x11.GrabModeSync, x11.None, x11.None);
 
     var event: x11.XEvent = undefined;
     while (self.running) {
@@ -136,6 +148,8 @@ fn initInputs(self: *Self) Error!void {
         return Error.AlreadyRunningWM;
     }
 }
+
+pub fn grabButtons(_: *Self) void {}
 
 pub fn grabKeys(wm: *Self) void {
     var s: c_int = 0;
