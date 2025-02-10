@@ -6,7 +6,7 @@ const std = @import("std");
 const util = @import("util.zig");
 const x11 = @import("X11.zig");
 
-pub fn rearrangeWorkspace(wm: *WindowManager) void {
+fn rearrangeWorkspace(wm: *WindowManager) void {
     const workspace = &wm.workspaces[wm.current_workspace];
     workspace.arrangeWindows(&wm.root.alignment, wm.display) catch return;
 }
@@ -62,7 +62,22 @@ pub fn tag(wm: *WindowManager, index: u8) void {
     }
 }
 
-pub fn toggletag(_: *WindowManager) void {}
+// Toggle a tag of a given window,
+// only if window is tagged in at least 1 other workspace
+pub fn toggleTag(wm: *WindowManager, index: u8) void {
+    if (index == wm.current_workspace) return;
+
+    const workspace = &wm.workspaces[wm.current_workspace];
+
+    if (workspace.active_window) |node| {
+        var window_count: usize = 0;
+        for (&wm.workspaces) |*other| {
+            if (other.findWindowNode(node.data) != null) window_count += 1;
+        }
+
+        if (window_count > 1) wm.workspaces[index].toggleTagWindow(node.data) catch unreachable;
+    }
+}
 
 pub fn focus(wm: *WindowManager, x11_window: x11.Window) void {
     const workspace = &wm.workspaces[wm.current_workspace];

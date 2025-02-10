@@ -68,6 +68,10 @@ pub const Default = Config{
         KSC(ModLayer1, x11.XK_2, action.tag, .{@as(u8, 1)}),
         KSC(ModLayer1, x11.XK_3, action.tag, .{@as(u8, 2)}),
         KSC(ModLayer1, x11.XK_4, action.tag, .{@as(u8, 3)}),
+        KSC(ModLayer3, x11.XK_1, action.toggleTag, .{@as(u8, 0)}),
+        KSC(ModLayer3, x11.XK_2, action.toggleTag, .{@as(u8, 1)}),
+        KSC(ModLayer3, x11.XK_3, action.toggleTag, .{@as(u8, 2)}),
+        KSC(ModLayer3, x11.XK_4, action.toggleTag, .{@as(u8, 3)}),
 
         // View workspace
         KSC(ModLayer0, x11.XK_1, action.view, .{@as(u8, 0)}),

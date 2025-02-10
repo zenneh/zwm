@@ -7,6 +7,8 @@ pub usingnamespace @cImport({
 
 const x11 = @This();
 
+pub const ErrorHandler = fn (?*x11.Display, [*c]x11.XErrorEvent) callconv(.C) c_int;
+
 pub fn getModifierName(mod: c_int) []const u8 {
     return switch (mod) {
         x11.ShiftMask => "Shift",

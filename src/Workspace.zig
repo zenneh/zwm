@@ -48,6 +48,14 @@ pub fn deinit(self: *Self) void {
     }
 }
 
+pub fn toggleTagWindow(self: *Self, window: *Window) Error!void {
+    if (self.findWindowNode(window)) |node| {
+        try self.untagWindow(node.data);
+    } else {
+        try self.tagWindow(window);
+    }
+}
+
 pub fn tagWindow(self: *Self, window: *Window) Error!void {
     if (self.findWindowNode(window)) |_| return;
 
@@ -155,7 +163,7 @@ pub fn decrementIndex(self: *Self, amount: usize) void {
     self.index = @intCast((self.index -% amount) % self.windows.len);
 }
 
-fn findWindowNode(self: *Self, window: *Window) ?*std.DoublyLinkedList(*Window).Node {
+pub fn findWindowNode(self: *Self, window: *Window) ?*std.DoublyLinkedList(*Window).Node {
     var it = self.windows.first;
     while (it) |node| : (it = node.next) {
         if (node.data == window) return node;

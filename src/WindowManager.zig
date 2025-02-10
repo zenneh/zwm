@@ -81,6 +81,7 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn start(self: *Self) Error!void {
+    CURRENT = self;
     try self.openDisplay();
     defer self.closeDisplay();
 
@@ -171,8 +172,11 @@ fn deinitError(_: *Self) void {
     _ = x11.XSetErrorHandler(null);
 }
 
-fn handleError(_: *Self, err: *x11.XErrorEvent) void {
-    std.log.err("X11 Error: {d}", .{err.error_code});
+fn handleError(self: *Self, event: *x11.XErrorEvent) void {
+    var buffer: [256]u8 = .{0} ** 256;
+    _ = x11.XGetErrorText(self.display, event.*.error_code, @ptrCast(&buffer), 256);
+
+    std.log.err("X11 Error: {s} (code: {d})", .{ buffer, event.error_code });
     unreachable;
 }
 
