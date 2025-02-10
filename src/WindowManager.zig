@@ -20,7 +20,7 @@ var CURRENT: ?*Self = null;
 pub const WM_EVENT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.KeyPressMask | x11.EnterWindowMask | x11.LeaveWindowMask | x11.FocusChangeMask | x11.PropertyChangeMask | x11.StructureNotifyMask | x11.PointerMotionMask;
 pub const WINDOW_EVENT_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
 pub const BITMASK = u9;
-pub const NUM_WORKSPACES = @typeInfo(BITMASK).Int.bits;
+pub const NUM_WORKSPACES = @typeInfo(BITMASK).int.bits;
 pub const NUM_CURSORS = 3;
 
 pub const WindowList = std.DoublyLinkedList(Window);

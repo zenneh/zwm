@@ -22,8 +22,8 @@ pub fn createShortCut(
     const WindowType = @TypeOf(*WindowManager);
 
     comptime {
-        const expected_fields = @typeInfo(ArgsTuple).Struct.fields;
-        const provided_fields = @typeInfo(ProvidedArgs).Struct.fields;
+        const expected_fields = @typeInfo(ArgsTuple).@"struct".fields;
+        const provided_fields = @typeInfo(ProvidedArgs).@"struct".fields;
 
         // Check if handler method has the correct parameters
         if (expected_fields.len == 0 or @TypeOf(expected_fields[0].type) != WindowType) {

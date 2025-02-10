@@ -28,7 +28,7 @@ ZWM follows a modular design with these core components:
 
 ### Prerequisites
 
-- Zig compiler (latest version recommended)
+- Zig compiler (master branch) older versions are not supported
 - X11 development libraries
 - Linux operating system
 
