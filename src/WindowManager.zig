@@ -1,34 +1,21 @@
 const x11 = @import("X11.zig");
 const Config = @import("Config.zig");
-const Window = @import("Window.zig");
+const window = @import("Window.zig");
 const layout = @import("layout.zig");
 const plugin = @import("plugin.zig");
 const util = @import("util.zig");
 const Workspace = @import("Workspace.zig");
+const bitmask = @import("bitmask.zig");
 
 const handler = @import("handler.zig");
 
 const std = @import("std");
 const debug = std.debug;
 
-const Self = @This();
+const Allocator = std.mem.Allocator;
 
-// Singleton instance for the error handler,
-// should not be fucked around with manually
-var CURRENT: ?*Self = null;
-
-pub const WM_EVENT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.KeyPressMask | x11.EnterWindowMask | x11.LeaveWindowMask | x11.FocusChangeMask | x11.PropertyChangeMask | x11.StructureNotifyMask;
-pub const WINDOW_EVENT_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
-pub const BITMASK = u9;
-pub const NUM_WORKSPACES = @typeInfo(BITMASK).Int.bits;
-pub const NUM_CURSORS = 3;
-
-const InputState = struct {
-    x: c_int,
-    y: c_int,
-};
-
-pub const WindowList = std.DoublyLinkedList(Window);
+// pub const WM_EVENT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.KeyPressMask | x11.EnterWindowMask | x11.LeaveWindowMask | x11.FocusChangeMask | x11.PropertyChangeMask | x11.StructureNotifyMask;
+// pub const WINDOW_EVENT_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
 
 pub const Error = error{
     AlreadyRunningWM,
@@ -37,27 +24,78 @@ pub const Error = error{
     AllocationFailed,
 };
 
-// Global error handler for x11 reported errors
-fn xErrorHandler(_: ?*x11.Display, event: [*c]x11.XErrorEvent) callconv(.C) c_int {
-    if (CURRENT) |wm| {
-        wm.handleError(event);
-    }
+// TODO: refactor to a display struct
+const Display = x11.Display;
 
-    return 0;
+const Screen = c_int;
+
+const NUM_EVENTS = x11.LASTEvent;
+
+pub fn WindowManager(comptime config: Config) type {
+    const WorkspaceMask = util.requireUnsignedInt(config.workspaces);
+    const Window = window.Window(WorkspaceMask);
+    const WindowList = std.DoublyLinkedList(Window);
+
+    return struct {
+        allocator: std.mem.Allocator,
+
+        // Root window on the current screen
+        root: Window,
+
+        // Current x11 display
+        display: Display,
+
+        // Current x11 screen
+        screen: Screen,
+
+        // List of active windows
+        windows: WindowList,
+
+        // For each XEvent we allocate space for the handlers
+        event_handlers: [NUM_EVENTS][]const *const fn (*Self, *const x11.XEvent) void,
+
+        // A shortcut handler which will execute the actions associated to the shortcuts
+        shortcut_handler: *const fn (*Self, *const x11.XKeyEvent) void,
+
+        // A bitmask representing all the active workspaces
+        workspace_mask: bitmask.Mask(WorkspaceMask),
+
+        const Self = @This();
+
+        pub fn init(allocator: Allocator) !Self {
+            // Open connection to the x11 server
+            const display = try x11.openDisplay(null);
+
+            const screen = x11.XDefaultScreen(display);
+            if (screen == x11.False)
+                return .{
+                    .allocator = allocator,
+                    .display = display,
+                    .screen = undefined,
+                    .windows = .{},
+                    .workspace_mask = .{},
+                };
+        }
+
+        pub fn deinit(self: *Self) void {
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                self.allocator.destroy(node);
+            }
+        }
+
+        pub fn start(self: *Self) !void {}
+    };
 }
 
-root: Window,
-allocator: std.mem.Allocator,
-display: *x11.Display,
-config: *const Config,
-running: bool,
-screen: c_int,
-windows: WindowList,
-handlers: [x11.LASTEvent][]const *const fn (*Self, *const x11.XEvent) void,
-shortcut_handler: *const fn (*Self, *const x11.XKeyEvent) void,
-workspaces: [NUM_WORKSPACES]Workspace,
-current_workspace: u8 = 0,
-input_state: ?InputState,
+// Global error handler for x11 reported errors
+// fn xErrorHandler(_: ?*x11.Display, event: [*c]x11.XErrorEvent) callconv(.C) c_int {
+//     if (CURRENT) |wm| {
+//         wm.handleError(event);
+//     }
+
+//     return 0;
+// }
 
 pub fn init(allocator: std.mem.Allocator, comptime config: *const Config) Self {
     return .{
@@ -79,12 +117,6 @@ pub fn init(allocator: std.mem.Allocator, comptime config: *const Config) Self {
         },
         .input_state = null,
     };
-}
-
-pub fn deinit(self: *Self) void {
-    for (&self.workspaces) |*workspace| {
-        workspace.deinit();
-    }
 }
 
 pub fn start(self: *Self) Error!void {
@@ -116,17 +148,6 @@ pub fn start(self: *Self) Error!void {
         _ = x11.XNextEvent(self.display, &event);
         self.handleEvent(&event);
     }
-}
-
-// Display
-fn openDisplay(self: *Self) Error!void {
-    self.display = x11.XOpenDisplay(null) orelse {
-        return Error.DisplayConnectionFailed;
-    };
-}
-
-fn closeDisplay(self: *Self) void {
-    _ = x11.XCloseDisplay(self.display);
 }
 
 // Screen

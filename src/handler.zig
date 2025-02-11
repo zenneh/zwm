@@ -13,6 +13,33 @@ pub const HandlerEntry = struct {
     handlers: []const Handler,
 };
 
+pub const Default = &[_]HandlerEntry{
+    .{ .event = x11.MapRequest, .handlers = &[_]Handler{
+        mapRequest,
+    } },
+    .{ .event = x11.MappingNotify, .handlers = &[_]Handler{
+        mapNotify,
+    } },
+    .{ .event = x11.KeyPress, .handlers = &[_]Handler{
+        keyPress,
+    } },
+    .{ .event = x11.DestroyNotify, .handlers = &[_]Handler{
+        keyPress,
+    } },
+    .{ .event = x11.MotionNotify, .handlers = &[_]Handler{
+        motionNotify,
+    } },
+    .{ .event = x11.EnterNotify, .handlers = &[_]Handler{
+        enterNotify,
+    } },
+    .{ .event = x11.ButtonPress, .handlers = &[_]Handler{
+        buttonPress,
+    } },
+    .{ .event = x11.ButtonRelease, .handlers = &[_]Handler{
+        buttonRelease,
+    } },
+};
+
 pub fn mapRequest(wm: *WM, event: *const x11.XEvent) void {
     const casted = @as(*const x11.XMapRequestEvent, @ptrCast(event));
     wm.createWindow(casted.window) catch return;

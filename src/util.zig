@@ -7,8 +7,21 @@ const action = @import("action.zig");
 const Alloc = std.mem.Allocator;
 const process = std.process;
 const handler = @import("handler.zig");
-
 const shortcut = @import("shortcut.zig");
+
+pub fn requireUnsignedInt(comptime T: type) type {
+    comptime {
+        switch (@typeInfo(T)) {
+            .Int => |int| {
+                if (!int.signedness) {
+                    return T;
+                }
+                @compileError("Type must be an unsigned integer");
+            },
+            else => @compileError("Type must be an unsigned integer"),
+        }
+    }
+}
 
 pub fn createHandlers(comptime handlers: []const handler.HandlerEntry) [x11.LASTEvent][]const handler.Handler {
     return comptime blk: {

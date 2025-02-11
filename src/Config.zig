@@ -25,6 +25,9 @@ const ModLayer1 = x11.ShiftMask;
 const ModLayer2 = x11.ControlMask;
 const ModLayer3 = x11.ControlMask | x11.ShiftMask;
 
+// Workspaces
+workspaces: type,
+
 // Default Layout
 layout: Layout,
 
@@ -35,33 +38,19 @@ handlers: []const handler.HandlerEntry,
 shortcuts: []const shortcut.Shortcut,
 
 pub const Default = Config{
+    // Using a 9-bit workspace
+    .workspaces = u9,
+
+    // Default layout when opening a new workspace
     .layout = layouts.monocle,
-    .handlers = &[_]handler.HandlerEntry{
-        .{ .event = x11.MapRequest, .handlers = &[_]handler.Handler{
-            handler.mapRequest,
-        } },
-        .{ .event = x11.MappingNotify, .handlers = &[_]handler.Handler{
-            handler.mapNotify,
-        } },
-        .{ .event = x11.KeyPress, .handlers = &[_]handler.Handler{
-            handler.keyPress,
-        } },
-        .{ .event = x11.DestroyNotify, .handlers = &[_]handler.Handler{
-            handler.keyPress,
-        } },
-        .{ .event = x11.MotionNotify, .handlers = &[_]handler.Handler{
-            handler.motionNotify,
-        } },
-        .{ .event = x11.EnterNotify, .handlers = &[_]handler.Handler{
-            handler.enterNotify,
-        } },
-        .{ .event = x11.ButtonPress, .handlers = &[_]handler.Handler{
-            handler.buttonPress,
-        } },
-        .{ .event = x11.ButtonRelease, .handlers = &[_]handler.Handler{
-            handler.buttonRelease,
-        } },
-    },
+
+    // TODO: Fonts
+
+    // TODO: Cursors
+
+    // All event handlers
+    .handlers = handler.Default,
+
     .shortcuts = &[_]shortcut.Shortcut{
         // Tag window
         SC(ModLayer1, x11.XK_1, action.tag, .{@as(u8, 0)}),

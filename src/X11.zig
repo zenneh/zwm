@@ -5,9 +5,25 @@ pub usingnamespace @cImport({
     @cInclude("X11/Xatom.h");
 });
 
+const std = @import("std");
+
 const x11 = @This();
 
 pub const ErrorHandler = fn (?*x11.Display, [*c]x11.XErrorEvent) callconv(.C) c_int;
+
+// Display
+pub const Display = x11.Display;
+
+pub const DisplayError = error{DisplayConnectionFailed};
+
+pub fn openDisplay(name: ?[]const u8) DisplayError!*Display {
+    const ptr = if (name) |n| n.ptr else null;
+    return x11.XOpenDisplay(@ptrCast(ptr)) orelse DisplayError.DisplayConnectionFailed;
+}
+
+fn closeDisplay(display: *Display) void {
+    _ = x11.XCloseDisplay(display);
+}
 
 pub fn getModifierName(mod: c_int) []const u8 {
     return switch (mod) {
