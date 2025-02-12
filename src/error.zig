@@ -1,6 +1,7 @@
 const WindowManager = @import("WindowManager.zig");
 const x11 = @import("X11.zig");
 
+pub const ErrorHandler = fn (_: ?*x11.Display, _: [*c]x11.XErrorEvent) callconv(.C) c_int;
 fn createErrorHandlers(wm: *WindowManager) type {
     return struct {
 

@@ -1,5 +1,5 @@
 const Layout = @import("layout.zig").Layout;
-const Window = @import("Window.zig");
+const Window = @import("window.zig");
 const WindowManager = @import("WindowManager.zig");
 
 const std = @import("std");

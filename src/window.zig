@@ -53,6 +53,7 @@ pub fn Window(comptime T: type) type {
                 .handle = window,
                 .mode = .default,
                 .alignment = .{},
+                .mask = Mask(T).init(0),
             };
         }
 

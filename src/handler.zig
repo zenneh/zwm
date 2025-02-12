@@ -1,4 +1,6 @@
-const WM = @import("WindowManager.zig");
+const window_manager = @import("WindowManager.zig");
+const Context = window_manager.Context;
+const Error = window_manager.Error;
 const x11 = @import("X11.zig");
 
 const std = @import("std");
@@ -6,7 +8,7 @@ const debug = std.debug;
 const action = @import("action.zig");
 const util = @import("util.zig");
 
-pub const Handler = *const fn (wm: *WM, event: *const x11.XEvent) void;
+pub const Handler = *const fn (ctx: *const Context, event: *const x11.XEvent) Error!void;
 
 pub const HandlerEntry = struct {
     event: c_int,
@@ -17,78 +19,58 @@ pub const Default = &[_]HandlerEntry{
     .{ .event = x11.MapRequest, .handlers = &[_]Handler{
         mapRequest,
     } },
-    .{ .event = x11.MappingNotify, .handlers = &[_]Handler{
-        mapNotify,
-    } },
-    .{ .event = x11.KeyPress, .handlers = &[_]Handler{
-        keyPress,
-    } },
-    .{ .event = x11.DestroyNotify, .handlers = &[_]Handler{
-        keyPress,
-    } },
-    .{ .event = x11.MotionNotify, .handlers = &[_]Handler{
-        motionNotify,
-    } },
-    .{ .event = x11.EnterNotify, .handlers = &[_]Handler{
-        enterNotify,
-    } },
-    .{ .event = x11.ButtonPress, .handlers = &[_]Handler{
-        buttonPress,
-    } },
-    .{ .event = x11.ButtonRelease, .handlers = &[_]Handler{
-        buttonRelease,
-    } },
+    // .{ .event = x11.MappingNotify, .handlers = &[_]Handler{
+    //     mapNotify,
+    // } },
+    // .{ .event = x11.KeyPress, .handlers = &[_]Handler{
+    //     keyPress,
+    // } },
+    // .{ .event = x11.DestroyNotify, .handlers = &[_]Handler{
+    //     keyPress,
+    // } },
+    // .{ .event = x11.MotionNotify, .handlers = &[_]Handler{
+    //     motionNotify,
+    // } },
+    // .{ .event = x11.EnterNotify, .handlers = &[_]Handler{
+    //     enterNotify,
+    // } },
+    // .{ .event = x11.ButtonPress, .handlers = &[_]Handler{
+    //     buttonPress,
+    // } },
+    // .{ .event = x11.ButtonRelease, .handlers = &[_]Handler{
+    //     buttonRelease,
+    // } },
 };
 
-pub fn mapRequest(wm: *WM, event: *const x11.XEvent) void {
+pub fn mapRequest(ctx: *const Context, event: *const x11.XEvent) Error!void {
     const casted = @as(*const x11.XMapRequestEvent, @ptrCast(event));
-    wm.createWindow(casted.window) catch return;
+    try ctx.createWindow(casted.window);
 }
 
-pub fn mapNotify(wm: *WM, event: *const x11.XEvent) void {
-    const casted = @as(*const x11.XMappingEvent, @ptrCast(event));
-    _ = x11.XRefreshKeyboardMapping(@constCast(casted));
-    if (casted.request == x11.MappingKeyboard) {
-        wm.grabKeys();
-    }
-}
+// pub fn mapNotify(wm: *WM, event: *const x11.XEvent) void {
+//     // const casted = @as(*const x11.XMappingEvent, @ptrCast(event));
+// }
 
-pub fn enterNotify(wm: *WM, event: *const x11.XEvent) void {
-    const casted = @as(*const x11.XEnterWindowEvent, @ptrCast(event));
-    action.focus(wm, casted.window);
-}
+// pub fn enterNotify(wm: *WM, event: *const x11.XEvent) void {
+//     // const casted = @as(*const x11.XEnterWindowEvent, @ptrCast(event));
+// }
 
-pub fn motionNotify(wm: *WM, event: *const x11.XEvent) void {
-    const casted = @as(*const x11.XMotionEvent, @ptrCast(event));
-    debug.print("MotionNotify: window={X}, root={X}, x={}, y={}\n", .{ casted.window, casted.root, casted.x, casted.y });
-    action.moveWindow(wm, casted.x, casted.y);
-}
+// pub fn motionNotify(wm: *WM, event: *const x11.XEvent) void {
+//     // const casted = @as(*const x11.XMotionEvent, @ptrCast(event));
+// }
 
-pub fn keyPress(wm: *WM, event: *const x11.XEvent) void {
-    const casted = @as(*const x11.XKeyPressedEvent, @ptrCast(event));
-    wm.shortcut_handler(wm, casted);
-}
+// pub fn keyPress(wm: *WM, event: *const x11.XEvent) void {
+//     // const casted = @as(*const x11.XKeyPressedEvent, @ptrCast(event));
+// }
 
-pub fn buttonPress(wm: *WM, event: *const x11.XEvent) void {
-    const casted = @as(*const x11.XButtonPressedEvent, @ptrCast(event));
-    debug.print("ButtonPress: window={X}, button={}, state={b}, x={}, y={}\n", .{ casted.window, casted.button, casted.state, casted.x, casted.y });
-    wm.input_state = .{ .x = casted.x, .y = casted.y };
-    std.log.info("input state set {any}", .{wm.input_state});
-    // 	if (XGrabPointer(dpy, root, False, MOUSEMASK, GrabModeAsync, GrabModeAsync,
-    // None, cursor[CurMove]->cursor, CurrentTime) != GrabSuccess)
+// pub fn buttonPress(wm: *WM, event: *const x11.XEvent) void {
+//     // const casted = @as(*const x11.XButtonPressedEvent, @ptrCast(event));
+// }
 
-    const mask = x11.ButtonPressMask | x11.ButtonReleaseMask | x11.PointerMotionMask;
-    _ = x11.XGrabPointer(wm.display, wm.root.handle, x11.False, mask, x11.GrabModeAsync, x11.GrabModeAsync, x11.None, x11.None, x11.CurrentTime);
-}
+// pub fn buttonRelease(wm: *WM, event: *const x11.XEvent) void {
+//     // const casted = @as(*const x11.XButtonReleasedEvent, @ptrCast(event));
+// }
 
-pub fn buttonRelease(wm: *WM, event: *const x11.XEvent) void {
-    const casted = @as(*const x11.XButtonReleasedEvent, @ptrCast(event));
-    debug.print("ButtonRelease: window={X}, button={}, state={b}, x={}, y={}\n", .{ casted.window, casted.button, casted.state, casted.x, casted.y });
-    wm.input_state = null;
-    _ = x11.XUngrabPointer(wm.display, x11.CurrentTime);
-}
-
-pub fn destroyNotify(wm: *WM, event: *const x11.XEvent) void {
-    const casted = @as(*const x11.XDestroyWindowEvent, @ptrCast(event));
-    action.destroyWindow(wm, casted.window);
-}
+// pub fn destroyNotify(wm: *WM, event: *const x11.XEvent) void {
+//     // const casted = @as(*const x11.XDestroyWindowEvent, @ptrCast(event));
+// }

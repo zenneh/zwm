@@ -8,22 +8,23 @@ const Alloc = std.mem.Allocator;
 const process = std.process;
 const handler = @import("handler.zig");
 const shortcut = @import("shortcut.zig");
+const err = @import("error.zig");
 
 pub fn requireUnsignedInt(comptime T: type) type {
     comptime {
         switch (@typeInfo(T)) {
             .Int => |int| {
-                if (!int.signedness) {
+                if (int.signedness == .unsigned) {
                     return T;
                 }
-                @compileError("Type must be an unsigned integer");
+                @compileError("Integer must be unsigned");
             },
             else => @compileError("Type must be an unsigned integer"),
         }
     }
 }
 
-pub fn createHandlers(comptime handlers: []const handler.HandlerEntry) [x11.LASTEvent][]const handler.Handler {
+pub fn createEventHandlers(comptime handlers: []const handler.HandlerEntry) [x11.LASTEvent][]const handler.Handler {
     return comptime blk: {
         var result: [x11.LASTEvent][]const handler.Handler = undefined;
         for (&result, 0..) |*slot, i| {

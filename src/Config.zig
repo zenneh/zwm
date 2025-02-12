@@ -29,7 +29,7 @@ const ModLayer3 = x11.ControlMask | x11.ShiftMask;
 workspaces: type,
 
 // Default Layout
-layout: Layout,
+// layout: Layout,
 
 // X11 Event Handlers
 handlers: []const handler.HandlerEntry,
@@ -42,50 +42,53 @@ pub const Default = Config{
     .workspaces = u9,
 
     // Default layout when opening a new workspace
-    .layout = layouts.monocle,
+    // .layout = layouts.monocle,
+    // TODO: Theme
+    //
+    // TODO: Bar (configurable workspaces + custom)
 
-    // TODO: Fonts
+    // TODO: Fonts (for displaying in the bar)
 
-    // TODO: Cursors
+    // TODO: Cursors (for differen states: normal, resize, drag,...)
 
     // All event handlers
     .handlers = handler.Default,
 
     .shortcuts = &[_]shortcut.Shortcut{
         // Tag window
-        SC(ModLayer1, x11.XK_1, action.tag, .{@as(u8, 0)}),
-        SC(ModLayer1, x11.XK_2, action.tag, .{@as(u8, 1)}),
-        SC(ModLayer1, x11.XK_3, action.tag, .{@as(u8, 2)}),
-        SC(ModLayer1, x11.XK_4, action.tag, .{@as(u8, 3)}),
-        SC(ModLayer3, x11.XK_1, action.toggleTag, .{@as(u8, 0)}),
-        SC(ModLayer3, x11.XK_2, action.toggleTag, .{@as(u8, 1)}),
-        SC(ModLayer3, x11.XK_3, action.toggleTag, .{@as(u8, 2)}),
-        SC(ModLayer3, x11.XK_4, action.toggleTag, .{@as(u8, 3)}),
+        // SC(ModLayer1, x11.XK_1, action.tag, .{@as(u8, 0)}),
+        // SC(ModLayer1, x11.XK_2, action.tag, .{@as(u8, 1)}),
+        // SC(ModLayer1, x11.XK_3, action.tag, .{@as(u8, 2)}),
+        // SC(ModLayer1, x11.XK_4, action.tag, .{@as(u8, 3)}),
+        // SC(ModLayer3, x11.XK_1, action.toggleTag, .{@as(u8, 0)}),
+        // SC(ModLayer3, x11.XK_2, action.toggleTag, .{@as(u8, 1)}),
+        // SC(ModLayer3, x11.XK_3, action.toggleTag, .{@as(u8, 2)}),
+        // SC(ModLayer3, x11.XK_4, action.toggleTag, .{@as(u8, 3)}),
 
-        // View workspace
-        SC(ModLayer0, x11.XK_1, action.view, .{@as(u8, 0)}),
-        SC(ModLayer0, x11.XK_2, action.view, .{@as(u8, 1)}),
-        SC(ModLayer0, x11.XK_3, action.view, .{@as(u8, 2)}),
-        SC(ModLayer0, x11.XK_4, action.view, .{@as(u8, 3)}),
-        SC(ModLayer0, x11.XK_c, action.check, .{}),
+        // // View workspace
+        // SC(ModLayer0, x11.XK_1, action.view, .{@as(u8, 0)}),
+        // SC(ModLayer0, x11.XK_2, action.view, .{@as(u8, 1)}),
+        // SC(ModLayer0, x11.XK_3, action.view, .{@as(u8, 2)}),
+        // SC(ModLayer0, x11.XK_4, action.view, .{@as(u8, 3)}),
+        // SC(ModLayer0, x11.XK_c, action.check, .{}),
 
-        // Navigation
-        SC(ModLayer0, x11.XK_n, action.focusNext, .{}),
-        SC(ModLayer0, x11.XK_p, action.focusPrev, .{}),
+        // // Navigation
+        // SC(ModLayer0, x11.XK_n, action.focusNext, .{}),
+        // SC(ModLayer0, x11.XK_p, action.focusPrev, .{}),
 
-        // Workspace configuration
-        SC(ModLayer0, x11.XK_m, action.setLayout, .{layouts.monocle}),
-        SC(ModLayer0, x11.XK_t, action.setLayout, .{layouts.tile}),
-        SC(ModLayer1, x11.XK_i, action.incrementLayout, .{@as(usize, 1)}),
-        SC(ModLayer1, x11.XK_o, action.decrementLayout, .{@as(usize, 1)}),
+        // // Workspace configuration
+        // SC(ModLayer0, x11.XK_m, action.setLayout, .{layouts.monocle}),
+        // SC(ModLayer0, x11.XK_t, action.setLayout, .{layouts.tile}),
+        // SC(ModLayer1, x11.XK_i, action.incrementLayout, .{@as(usize, 1)}),
+        // SC(ModLayer1, x11.XK_o, action.decrementLayout, .{@as(usize, 1)}),
 
-        // Window configuration
-        SC(ModLayer1, x11.XK_p, action.toggleFloating, .{}),
+        // // Window configuration
+        // SC(ModLayer1, x11.XK_p, action.toggleFloating, .{}),
 
-        // Processes
-        SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
-        SC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
+        // // Processes
+        // SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
+        // SC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
 
-        SC(ModLayer0, x11.XK_q, action.kill, .{}),
+        // SC(ModLayer0, x11.XK_q, action.kill, .{}),
     },
 };

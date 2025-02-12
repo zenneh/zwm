@@ -1,18 +1,19 @@
 const Config = @import("Config.zig");
-const WindowManager = @import("WindowManager.zig");
+const WindowManager = @import("WindowManager.zig").WindowManager;
 
 const x = @import("X11.zig");
 const std = @import("std");
 
 pub fn main() !void {
-    var alloc = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer {
-        if (alloc.deinit() == .leak) {
+        if (gpa.deinit() == .leak) {
             @panic("memory leak!");
         }
     }
 
-    var wm = WindowManager.init(alloc.allocator(), &Config.Default);
+    const WM = WindowManager(Config.Default);
+    var wm = try WM.init(gpa.allocator());
     defer wm.deinit();
 
     wm.start() catch {

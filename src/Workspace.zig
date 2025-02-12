@@ -1,6 +1,6 @@
 const Alignment = @import("layout.zig").Alignment;
-const Window = @import("Window.zig");
-const Layout = @import("layout.zig").Layout;
+const Window = @import("window.zig");
+// const Layout = @import("layout.zig").Layout;
 const layouts = @import("layout.zig").layouts;
 const LayoutType = @import("layout.zig").Type;
 
@@ -23,7 +23,7 @@ allocator: std.mem.Allocator,
 // How many windows allowed on the root
 index: usize,
 
-layout: Layout,
+// layout: Layout,
 
 // List of window pointers active in this workspace
 windows: WindowList,
@@ -97,9 +97,9 @@ pub fn unmapAllWindows(self: *Self, display: *x11.Display) void {
     }
 }
 
-pub fn setLayout(self: *Self, layout: Layout) void {
-    self.layout = layout;
-}
+// pub fn setLayout(self: *Self, layout: Layout) void {
+//     self.layout = layout;
+// }
 
 pub fn arrangeWindows(self: *Self, alignment: *const Alignment, display: *x11.Display) Error!void {
     var windows = try self.allocator.alloc(*Window, self.windows.len);
@@ -162,7 +162,6 @@ pub fn decrementIndex(self: *Self, amount: usize) void {
     }
     self.index = @intCast((self.index -% amount) % self.windows.len);
 }
-
 pub fn findWindowNode(self: *Self, window: *Window) ?*std.DoublyLinkedList(*Window).Node {
     var it = self.windows.first;
     while (it) |node| : (it = node.next) {
