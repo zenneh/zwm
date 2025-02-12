@@ -57,6 +57,14 @@ pub fn Window(comptime T: type) type {
             };
         }
 
+        pub fn tag(self: *Self, position: usize) !void {
+            self.mask.tag(position);
+        }
+
+        pub fn untag(self: *Self, position: usize) !void {
+            self.mask.untag(position);
+        }
+
         pub fn selectInput(self: *const Self, display: *Display, mask: c_long) Error!void {
             const result = x11.XSelectInput(
                 display,

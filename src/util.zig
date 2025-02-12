@@ -1,14 +1,40 @@
-// Transforms the handlers into an indexable array at compile time
-// since zig doesn't support a nice syntax for this like in C.
-const WindowManager = @import("WindowManager.zig");
 const x11 = @import("X11.zig");
 const std = @import("std");
 const action = @import("action.zig");
-const Alloc = std.mem.Allocator;
 const process = std.process;
 const handler = @import("handler.zig");
 const shortcut = @import("shortcut.zig");
-const err = @import("error.zig");
+const layout = @import("layout.zig");
+const window_manager = @import("WindowManager.zig");
+
+const Context = window_manager.Context;
+const Error = window_manager.Error;
+const Alloc = std.mem.Allocator;
+
+pub fn createLayoutsType(comptime T: type) type {
+    return @TypeOf([@bitSizeOf(T)]*const layout.Layout);
+}
+pub fn createLayouts(comptime T: type, default: *const layout.Layout) [@bitSizeOf(T)]*const layout.Layout {
+    return .{default} ** @bitSizeOf(T);
+}
+// pub fn createLayouts(comptime T: type, default: *const layout.Layout) []*const layout.Layout {
+//     const bits = @bitSizeOf(T);
+//     return comptime init: {
+//         const layouts: [bits]*const layout.Layout = .{default} ** bits;
+//         break :init &layouts[0..];
+//     };
+// }
+
+pub fn createCurrentWorkspaceType(comptime T: type) type {
+    const bits = @bitSizeOf(T);
+
+    const log_bits = @as(comptime_int, @intFromFloat(@ceil(std.math.log2(@as(f64, @floatFromInt(bits))))));
+
+    return @Type(.{ .Int = .{
+        .signedness = .unsigned,
+        .bits = log_bits,
+    } });
+}
 
 pub fn requireUnsignedInt(comptime T: type) type {
     comptime {
@@ -58,7 +84,7 @@ pub fn createEventHandlers(comptime handlers: []const handler.HandlerEntry) [x11
     };
 }
 
-pub fn createShortcutHandler(comptime shortcuts: []const shortcut.Shortcut) fn (*WindowManager, *const x11.XKeyEvent) void {
+pub fn createShortcutHandler(comptime shortcuts: []const shortcut.Shortcut) fn (*Context, *const x11.XKeyEvent) Error!void {
 
     // Validate shortcuts
     comptime {
@@ -72,36 +98,16 @@ pub fn createShortcutHandler(comptime shortcuts: []const shortcut.Shortcut) fn (
     }
 
     return struct {
-        pub fn handle(wm: *WindowManager, casted: *const x11.XKeyEvent) void {
+        pub fn handle(ctx: *Context, casted: *const x11.XKeyEvent) Error!void {
             inline for (shortcuts) |s| {
-                const keysym = x11.XKeycodeToKeysym(wm.display, @intCast(casted.keycode), 0);
+                const keysym = x11.XKeycodeToKeysym(ctx.display, @intCast(casted.keycode), 0);
 
                 if (casted.state == s.mod and keysym == s.key) {
-                    s.invoke(wm);
+                    try s.invoke(ctx);
                 }
             }
         }
     }.handle;
-}
-
-pub fn getWindow(windows: *WindowManager.WindowList, window_id: c_ulong) ?*WindowManager.Window {
-    var current = windows.first;
-    while (current) |node| {
-        if (node.data.window == window_id) return &node.data;
-        current = node.next;
-    }
-
-    return null;
-}
-
-pub fn getWindowNode(windows: *WindowManager.WindowList, window_id: c_ulong) ?*WindowManager.WindowList.Node {
-    var current = windows.first;
-    while (current) |node| {
-        if (node.data.window == window_id) return &node;
-        current = node.next;
-    }
-
-    return null;
 }
 
 pub fn spawn_process(env: ?*const process.EnvMap, argv: []const []const u8, allocator: Alloc) !void {

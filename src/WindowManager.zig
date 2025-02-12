@@ -26,7 +26,7 @@ pub const Error = error{
     DisplayConnectionFailed,
     CursorInitFailed,
     AllocationFailed,
-};
+} || std.mem.Allocator.Error || window.Error || std.io.AnyWriter.Error;
 
 // X11 style error handler
 pub const ErrorHandler = fn (_: ?*x11.Display, _: [*c]x11.XErrorEvent) callconv(.C) c_int;
@@ -46,10 +46,23 @@ const State = enum {
 
 pub const Context = struct {
     ptr: *anyopaque,
+
     vtable: struct {
         createWindow: *const fn (ptr: *anyopaque, x11_window: x11.Window) Error!void,
         destroyWindow: *const fn (ptr: *anyopaque, x11_window: x11.Window) Error!void,
+        handleKeyEvent: *const fn (ptr: *anyopaque, event: *const x11.XKeyEvent) Error!void,
+        viewWorkspace: *const fn (ptr: *anyopaque, index: usize) Error!void,
+        tagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
+        toggleTagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
+
+        check: *const fn (ptr: *anyopaque) Error!void,
+        focusNextWindow: *const fn (ptr: *anyopaque) Error!void,
+        focusPrevWindow: *const fn (ptr: *anyopaque) Error!void,
+        setLayout: *const fn (ptr: *anyopaque, l: *const layout.Layout) Error!void,
+        incrementMaster: *const fn (ptr: *anyopaque, amount: i8) Error!void,
     },
+
+    display: *Display,
 
     pub fn createWindow(self: Context, x11_window: x11.Window) Error!void {
         try self.vtable.createWindow(self.ptr, x11_window);
@@ -58,6 +71,42 @@ pub const Context = struct {
     pub fn destroyWindow(self: Context, x11_window: x11.Window) Error!void {
         try self.vtable.destroyWindow(self.ptr, x11_window);
     }
+
+    pub fn handleKeyEvent(self: Context, event: *const x11.XKeyEvent) Error!void {
+        try self.vtable.handleKeyEvent(self.ptr, event);
+    }
+
+    pub fn viewWorkspace(self: Context, index: usize) Error!void {
+        try self.vtable.viewWorkspace(self.ptr, index);
+    }
+
+    pub fn tagWindow(self: Context, index: usize) Error!void {
+        try self.vtable.tagWindow(self.ptr, index);
+    }
+
+    pub fn toggleTagWindow(self: Context, index: usize) Error!void {
+        try self.vtable.toggleTagWindow(self.ptr, index);
+    }
+
+    pub fn check(self: Context) Error!void {
+        try self.vtable.check(self.ptr);
+    }
+
+    pub fn focusNextWindow(self: Context) Error!void {
+        try self.vtable.focusNextWindow(self.ptr);
+    }
+
+    pub fn focusPrevWindow(self: Context) Error!void {
+        try self.vtable.focusPrevWindow(self.ptr);
+    }
+
+    pub fn setLayout(self: Context, l: *const layout.Layout) Error!void {
+        try self.vtable.setLayout(self.ptr, l);
+    }
+
+    pub fn incrementMaster(self: *Context, amount: i8) Error!void {
+        try self.vtable.incrementMaster(self.ptr, amount);
+    }
 };
 
 pub fn WindowManager(comptime config: Config) type {
@@ -65,6 +114,7 @@ pub fn WindowManager(comptime config: Config) type {
     const WorkspaceMask = bitmask.Mask(Mask);
     const Window = window.Window(Mask);
     const WindowList = std.DoublyLinkedList(Window);
+    const CurrentWorkspace = util.createCurrentWorkspaceType(Mask);
 
     return struct {
         allocator: std.mem.Allocator,
@@ -81,6 +131,12 @@ pub fn WindowManager(comptime config: Config) type {
         // List of active windows
         windows: WindowList,
 
+        // Current active window
+        current_window: ?*WindowList.Node = null,
+
+        // Integer of the current workspace index
+        current_workspace: CurrentWorkspace,
+
         // A bitmask representing all the active workspaces
         workspace_mask: WorkspaceMask,
 
@@ -88,14 +144,23 @@ pub fn WindowManager(comptime config: Config) type {
         // error_handler: comptime
         state: State,
 
+        // How many window to display on the master side
+        // TODO: make this workspace specific with (min 0) and (max workspace windows.len)
+        master: usize,
+
         // For each XEvent we allocate space for the handlers
         const event_handlers = util.createEventHandlers(config.handlers);
 
         // A shortcut handler which will execute the actions associated to the shortcuts
         const shortcut_handler = util.createShortcutHandler(config.shortcuts);
 
+        // layouts:
+        var layouts = util.createLayouts(Mask, config.layout);
+
         // Global reference to the current window manager for error handling
         var global: ?*Self = null;
+
+        const shortcuts = config.shortcuts;
 
         const Self = @This();
 
@@ -108,7 +173,8 @@ pub fn WindowManager(comptime config: Config) type {
 
             // Get the root window
             const x11_window = x11.XRootWindow(display, screen);
-            const root = Window.init(x11_window);
+            var root = Window.init(x11_window);
+            try root.updateAlignment(display);
 
             return Self{
                 .allocator = allocator,
@@ -117,7 +183,9 @@ pub fn WindowManager(comptime config: Config) type {
                 .screen = screen,
                 .windows = .{},
                 .workspace_mask = WorkspaceMask.init(0),
+                .current_workspace = 0,
                 .state = .initial,
+                .master = config.master,
             };
         }
 
@@ -131,17 +199,7 @@ pub fn WindowManager(comptime config: Config) type {
 
         // Start the window manager and listen for events
         pub fn start(self: *Self) !void {
-
-            // Setup singleton
-            Self.global = self;
-            defer Self.global = null;
-
-            // TODO: Configure error handler
-            _ = x11.XSetErrorHandler(Self.x11ErrorHandler);
-
-            // Select input
-            try self.root.selectInput(self.display, ROOT_MASK);
-            _ = x11.XSync(self.display, x11.False);
+            try self.setup();
 
             var event: x11.XEvent = undefined;
             while (self.state == .running) {
@@ -152,20 +210,40 @@ pub fn WindowManager(comptime config: Config) type {
             if (self.state == .recover) self.recover();
         }
 
+        fn setup(self: *Self) Error!void {
+            // Setup singleton
+            Self.global = self;
+            defer Self.global = null;
+
+            // Configure error handler
+            _ = x11.XSetErrorHandler(Self.x11ErrorHandler);
+
+            // Select input
+            try self.root.selectInput(self.display, ROOT_MASK);
+            _ = x11.XSync(self.display, x11.False);
+
+            self.grabKeys();
+
+            self.state = .running;
+        }
+
         fn recover(_: *Self) void {
             //TODO: Recover from error and restart
         }
 
-        fn handleError(self: *Self, _: ?*x11.Display, _: [*c]x11.XErrorEvent) void {
-            std.log.err("in error handler", .{});
+        fn handleError(self: *Self, _: ?*x11.Display, event: [*c]x11.XErrorEvent) void {
+            var buff: [256]u8 = undefined;
+            _ = x11.XGetErrorText(self.display, event.*.error_code, &buff, buff.len);
+
+            std.log.err("{s}", .{buff});
+
             switch (self.state) {
                 .initial => {
                     self.state = .stopping;
-                    std.log.err("Another wm is running", .{});
+                    std.log.err("Failed to become window manager (another WM running?)\n", .{});
                 },
-                .running => unreachable,
-                .recover => unreachable,
-                .stopping => {},
+                .running => self.state = .recover,
+                else => return,
             }
         }
 
@@ -178,20 +256,204 @@ pub fn WindowManager(comptime config: Config) type {
 
         pub fn context(self: *Self) Context {
             return Context{
+                .display = self.display,
                 .ptr = self,
                 .vtable = .{
                     .createWindow = createWindow,
                     .destroyWindow = destroyWindow,
+                    .handleKeyEvent = handleKeyEvent,
+                    .viewWorkspace = viewWorkspace,
+                    .tagWindow = tagWindow,
+                    .toggleTagWindow = toggleTagWindow,
+                    .check = check,
+                    .focusNextWindow = focusNextWindow,
+                    .focusPrevWindow = focusPrevWindow,
+                    .setLayout = setLayout,
+                    .incrementMaster = incrementMaster,
                 },
             };
         }
 
-        fn createWindow(ptr: *anyopaque, _: x11.Window) Error!void {
-            const self: *Self = @ptrCast(@alignCast(ptr));
-            _ = self;
+        fn arrange(self: *Self) Error!void {
+            const alignments = try self.allocator.alloc(*layout.Alignment, self.windows.len);
+            defer self.allocator.free(alignments);
+
+            const windows = try self.allocator.alloc(*Window, self.windows.len);
+            defer self.allocator.free(windows);
+
+            std.log.debug("root alignment {any}", .{self.root.alignment});
+
+            var it = self.windows.first;
+            var index: usize = 0;
+            while (it) |node| : (it = node.next) {
+                const is_active = node.data.mask.has(self.current_workspace);
+                // Set visability depending on workspace
+                if (is_active) {
+                    try node.data.map(self.display);
+                } else {
+                    try node.data.unmap(self.display);
+                }
+
+                // Only pass default windows to layout
+                if (node.data.mode == .default and is_active) {
+                    alignments[index] = &node.data.alignment;
+                    windows[index] = &node.data;
+
+                    std.log.debug("alignment before {any}", .{node.data.alignment});
+                    index += 1;
+                }
+            }
+
+            Self.layouts[self.current_workspace].arrange(&.{
+                .index = self.master,
+                .root = &self.root.alignment,
+            }, alignments[0..index]);
+
+            for (alignments[0..index]) |al| {
+                std.log.debug("alignment before {any}", .{al});
+            }
+
+            for (windows, 0..) |w, i| {
+                try w.moveResize(
+                    self.display,
+                    alignments[i].pos.x,
+                    alignments[i].pos.y,
+                    alignments[i].width,
+                    alignments[i].height,
+                );
+            }
         }
 
-        fn destroyWindow(_: *anyopaque, _: x11.Window) Error!void {}
+        fn findWindowNodeByHandle(self: *Self, x11_window: x11.Window) ?*WindowList.Node {
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                if (node.data.handle == x11_window) return node;
+            }
+
+            return null;
+        }
+
+        fn findFirstActiveNode(self: *Self) ?*WindowList.Node {
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                if (node.data.mask.has(self.current_workspace)) return node;
+            }
+
+            return null;
+        }
+
+        fn focus(self: *Self) Error!void {
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                if (node == self.current_window) {
+                    try node.data.focus(self.display);
+                } else {
+                    try node.data.unfocus(self.display);
+                }
+            }
+        }
+
+        fn createWindow(ptr: *anyopaque, x11_window: x11.Window) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+
+            if (self.findWindowNodeByHandle(x11_window) != null) return;
+
+            const node = try self.allocator.create(WindowList.Node);
+            node.data = Window.init(x11_window);
+            node.data.mask.tag(self.current_workspace);
+
+            try node.data.map(self.display);
+
+            self.windows.append(node);
+            self.current_window = node;
+
+            try self.arrange();
+        }
+
+        fn destroyWindow(ptr: *anyopaque, x11_window: x11.Window) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+
+            if (self.findWindowNodeByHandle(x11_window)) |node| {
+                try node.data.destroy(self.display);
+                self.windows.remove(node);
+
+                if (self.current_window == node) {
+                    self.current_window = self.findFirstActiveNode();
+                }
+
+                self.allocator.destroy(node);
+            }
+
+            try self.arrange();
+        }
+
+        fn viewWorkspace(ptr: *anyopaque, index: usize) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            self.current_workspace = @truncate(index);
+            try self.arrange();
+        }
+
+        fn tagWindow(ptr: *anyopaque, index: usize) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            if (self.current_window) |node| {
+                node.data.mask.clear();
+                node.data.mask.tag(@intCast(index));
+            }
+            try self.arrange();
+        }
+
+        fn toggleTagWindow(ptr: *anyopaque, index: usize) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            if (self.current_window) |node| {
+                node.data.mask.toggleTag(@intCast(index));
+
+                // Node has no tags so retag current workspace
+                if (node.data.mask.mask == 0) {
+                    node.data.mask.tag(@intCast(index));
+                    return;
+                }
+            }
+            try self.arrange();
+        }
+
+        fn focusNextWindow(ptr: *anyopaque) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            const current = self.current_window orelse return;
+            var it = current.next;
+            while (it) |node| : (it = node.next) {
+                if (!node.data.mask.has(self.current_workspace)) continue;
+                self.current_window = node;
+            }
+
+            try self.focus();
+        }
+
+        fn focusPrevWindow(ptr: *anyopaque) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            const current = self.current_window orelse return;
+            var it = current.prev;
+            while (it) |node| : (it = node.prev) {
+                if (!node.data.mask.has(self.current_workspace)) continue;
+                self.current_window = node;
+            }
+
+            try self.focus();
+        }
+
+        fn setLayout(ptr: *anyopaque, l: *const layout.Layout) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            Self.layouts[self.current_workspace] = l;
+        }
+
+        fn incrementMaster(ptr: *anyopaque, amount: i8) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            self.master = @intCast(@as(i8, @intCast(self.master)) + amount);
+        }
+
+        fn handleKeyEvent(ptr: *anyopaque, event: *const x11.XKeyEvent) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try Self.shortcut_handler(@constCast(&self.context()), event);
+        }
 
         fn x11ErrorHandler(display: ?*x11.Display, event: [*c]x11.XErrorEvent) callconv(.C) c_int {
             if (Self.global) |wm| {
@@ -199,18 +461,50 @@ pub fn WindowManager(comptime config: Config) type {
             }
             return 0;
         }
+
+        fn grabKeys(self: *Self) void {
+            var s: c_int = 0;
+            var e: c_int = 0;
+            var skip: c_int = 0;
+
+            var syms: ?[*c]x11.KeySym = undefined;
+
+            _ = x11.XUngrabKey(self.display, x11.AnyKey, x11.AnyModifier, self.root.handle);
+            _ = x11.XDisplayKeycodes(self.display, &s, &e);
+
+            syms = x11.XGetKeyboardMapping(self.display, @intCast(s), e - s + 1, &skip);
+
+            var k: c_int = s;
+            if (syms == null) return;
+
+            while (k <= e) : (k += 1) {
+                for (Self.shortcuts) |shortcut| {
+                    if (shortcut.key == syms.?[@intCast((k - s) * skip)]) {
+                        std.log.debug("grabbing key {d}", .{shortcut.key});
+                        _ = x11.XGrabKey(self.display, k, shortcut.mod, self.root.handle, x11.True, x11.GrabModeAsync, x11.GrabModeAsync);
+                    }
+                }
+            }
+        }
+
+        fn check(ptr: *anyopaque) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            const writer = std.io.getStdOut().writer();
+
+            try writer.print("========= ZWM Debug Check =========\n", .{});
+            try writer.print("State: {}\n", .{self.state});
+            try writer.print("Screen: {}\n", .{self.screen});
+            try writer.print("Root: {}\n", .{self.root});
+            try writer.print("Current Workspace: {}\n", .{self.current_workspace});
+            try writer.print("Windows ({d})\n", .{self.windows.len});
+
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                try writer.print(" - handle: {}, mask: {b:9>}, mode: {any}", .{ node.data.handle, node.data.mask.mask, node.data.mode });
+            }
+        }
     };
 }
-
-// // Inputs
-// fn initInputs(self: *Self) Error!void {
-//     const result = x11.XSelectInput(self.display, self.root.handle, WM_EVENT_MASK);
-
-//     if (result == 0) {
-//         std.log.err("Failed to become window manager (another WM running?)\n", .{});
-//         return Error.AlreadyRunningWM;
-//     }
-// }
 
 // pub fn grabButtons(_: *Self) void {}
 
@@ -238,30 +532,6 @@ pub fn WindowManager(comptime config: Config) type {
 //     }
 
 //     _ = x11.XFree(@ptrCast(syms));
-// }
-
-// // Error handling
-// fn initError(_: *Self) void {
-//     _ = x11.XSetErrorHandler(xErrorHandler);
-// }
-
-// fn deinitError(_: *Self) void {
-//     _ = x11.XSetErrorHandler(null);
-// }
-
-// fn handleError(self: *Self, event: *x11.XErrorEvent) void {
-//     var buffer: [256]u8 = .{0} ** 256;
-//     _ = x11.XGetErrorText(self.display, event.*.error_code, @ptrCast(&buffer), 256);
-
-//     std.log.err("X11 Error: {s} (code: {d})", .{ buffer, event.error_code });
-//     unreachable;
-// }
-
-// fn handleEvent(self: *Self, event: [*c]x11.XEvent) void {
-//     const event_index: usize = @intCast(event.*.type);
-//     for (self.handlers[event_index]) |f| {
-//         f(self, @ptrCast(event));
-//     }
 // }
 
 // pub fn currentWorkspace(self: *Self) *Workspace {

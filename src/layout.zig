@@ -1,7 +1,7 @@
 const WM = @import("WindowManager.zig");
 const Window = @import("window.zig");
 const std = @import("std");
-const x = @import("X11.zig");
+const x11 = @import("X11.zig");
 const Alloc = std.mem.Allocator;
 
 pub const Pos = struct {
@@ -11,8 +11,8 @@ pub const Pos = struct {
 
 pub const Alignment = struct {
     pos: Pos = Pos{},
-    width: u16 = 0,
-    height: u16 = 0,
+    width: u32 = 0,
+    height: u32 = 0,
 };
 
 // TODO, for window sizing
@@ -21,37 +21,68 @@ pub const Constraint = struct {};
 // Data necessary for arrangement
 pub const Context = struct {
     index: usize,
+    root: *const Alignment,
 };
 
-pub const ArrangeFn = *const fn (ctx: *const Context, windows: []*Window, alignment: *const Alignment, display: *x.Display) void;
-pub const CenterFn = *const fn (ctx: *const Context, windows: []*Window, alignment: *const Alignment, display: *x.Display) void;
+pub const ArrangeFn = *const fn (ctx: *const Context, alignments: []*Alignment) void;
 
-// pub const Layout = struct {
-//     arrange: ArrangeFn,
-//     center: ?CenterFn,
-// };
+pub const Layout = struct {
+    arrange: ArrangeFn,
+};
 
-// pub const layouts = struct {
-//     pub const monocle = Layout{
-//         .arrange = Monocle.arrange,
-//         .center = null,
-//     };
+pub const layouts = struct {
+    pub const monocle = Layout{
+        .arrange = Monocle.arrange,
+    };
 
-//     pub const tile = Layout{
-//         .arrange = Tile.arrange,
-//         .center = null,
-//     };
-// };
+    pub const tile = Layout{
+        .arrange = Tile.arrange,
+    };
+};
 
-// const Monocle = struct {
-//     fn arrange(ctx: *const Context, windows: []*Window, alignment: *const Alignment, display: *x.Display) void {
-//         _ = ctx;
-//         for (windows) |window| {
-//             window.*.alignment = alignment.*;
-//             window.arrange(display) catch unreachable;
-//         }
-//     }
-// };
+const Monocle = struct {
+    pub fn arrange(ctx: *const Context, alignments: []*Alignment) void {
+        for (alignments) |al| {
+            al.* = ctx.root.*;
+        }
+    }
+};
+
+const Tile = struct {
+    pub fn arrange(ctx: *const Context, alignments: []*Alignment) void {
+        if (alignments.len == 0) return;
+        if (alignments.len == 1) {
+            alignments[0].* = ctx.root.*;
+        }
+
+        var x: i32 = 0;
+        // var y: i32 = 0;
+        const width: u32 = if (alignments.len <= ctx.index) ctx.root.width else ctx.root.width / 2;
+        var height: u32 = undefined;
+        const ctxi = @as(u32, @intCast(ctx.index + 1));
+
+        for (alignments, 0..) |al, index| {
+            if (index <= ctx.index) {
+                height = ctx.root.height / ctxi;
+                al.* = Alignment{
+                    .pos = Pos{ .x = x, .y = @intCast(height * index) },
+                    .width = width,
+                    .height = ctx.root.height / ctxi,
+                };
+            } else {
+                x = @intCast(ctx.root.width / 2);
+                height = @intCast(ctx.root.height / (alignments.len - ctx.index));
+                al.* = Alignment{
+                    .pos = Pos{ .x = x, .y = @intCast((ctx.index - index) * height) },
+                    .width = width,
+                    .height = @intCast(ctx.root.height / ctx.index),
+                };
+            }
+        }
+    }
+};
+
+const Grid = struct {};
 
 // const Tile = struct {
 //     fn arrange(ctx: *const Context, windows: []*Window, alignment: *const Alignment, display: *x.Display) void {

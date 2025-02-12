@@ -17,8 +17,20 @@ pub fn Mask(comptime T: type) type {
             };
         }
 
-        pub fn tag(self: *@This(), position: T) !void {
+        pub fn has(self: *@This(), position: T) bool {
+            return (self.mask & (@as(T, 1) << @truncate(position))) != 0;
+        }
+
+        pub fn tag(self: *@This(), position: T) void {
+            self.mask |= (@as(T, 1) << @truncate(position));
+        }
+
+        pub fn toggleTag(self: *@This(), position: T) void {
             self.mask ^= (@as(T, 1) << @truncate(position));
+        }
+
+        pub fn untag(self: *@This(), position: T) void {
+            self.mask &= !(@as(T, 1) << @truncate(position));
         }
 
         pub fn next(self: *@This(), position: T) T {

@@ -22,9 +22,9 @@ pub const Default = &[_]HandlerEntry{
     // .{ .event = x11.MappingNotify, .handlers = &[_]Handler{
     //     mapNotify,
     // } },
-    // .{ .event = x11.KeyPress, .handlers = &[_]Handler{
-    //     keyPress,
-    // } },
+    .{ .event = x11.KeyPress, .handlers = &[_]Handler{
+        keyPress,
+    } },
     // .{ .event = x11.DestroyNotify, .handlers = &[_]Handler{
     //     keyPress,
     // } },
@@ -44,6 +44,7 @@ pub const Default = &[_]HandlerEntry{
 
 pub fn mapRequest(ctx: *const Context, event: *const x11.XEvent) Error!void {
     const casted = @as(*const x11.XMapRequestEvent, @ptrCast(event));
+    std.log.info("Maprequest: window - {}", .{casted.window});
     try ctx.createWindow(casted.window);
 }
 
@@ -51,16 +52,17 @@ pub fn mapRequest(ctx: *const Context, event: *const x11.XEvent) Error!void {
 //     // const casted = @as(*const x11.XMappingEvent, @ptrCast(event));
 // }
 
+pub fn keyPress(ctx: *const Context, event: *const x11.XEvent) Error!void {
+    const casted = @as(*const x11.XKeyPressedEvent, @ptrCast(event));
+    try ctx.handleKeyEvent(casted);
+}
+//
 // pub fn enterNotify(wm: *WM, event: *const x11.XEvent) void {
 //     // const casted = @as(*const x11.XEnterWindowEvent, @ptrCast(event));
 // }
 
 // pub fn motionNotify(wm: *WM, event: *const x11.XEvent) void {
 //     // const casted = @as(*const x11.XMotionEvent, @ptrCast(event));
-// }
-
-// pub fn keyPress(wm: *WM, event: *const x11.XEvent) void {
-//     // const casted = @as(*const x11.XKeyPressedEvent, @ptrCast(event));
 // }
 
 // pub fn buttonPress(wm: *WM, event: *const x11.XEvent) void {
