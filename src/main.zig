@@ -13,6 +13,7 @@ pub fn main() !void {
     }
 
     const WM = WindowManager(Config.Default);
+
     var wm = try WM.init(gpa.allocator());
     defer wm.deinit();
 

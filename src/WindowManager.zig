@@ -41,6 +41,7 @@ const State = enum {
     initial,
     running,
     recover,
+    stopping,
 };
 
 pub const Context = struct {
@@ -93,6 +94,9 @@ pub fn WindowManager(comptime config: Config) type {
         // A shortcut handler which will execute the actions associated to the shortcuts
         const shortcut_handler = util.createShortcutHandler(config.shortcuts);
 
+        // Global reference to the current window manager for error handling
+        var global: ?*Self = null;
+
         const Self = @This();
 
         pub fn init(allocator: Allocator) !Self {
@@ -106,7 +110,7 @@ pub fn WindowManager(comptime config: Config) type {
             const x11_window = x11.XRootWindow(display, screen);
             const root = Window.init(x11_window);
 
-            return .{
+            return Self{
                 .allocator = allocator,
                 .root = root,
                 .display = display,
@@ -127,8 +131,13 @@ pub fn WindowManager(comptime config: Config) type {
 
         // Start the window manager and listen for events
         pub fn start(self: *Self) !void {
+
+            // Setup singleton
+            Self.global = self;
+            defer Self.global = null;
+
             // TODO: Configure error handler
-            // _ = x11.XSetErrorHandler(eh);
+            _ = x11.XSetErrorHandler(Self.x11ErrorHandler);
 
             // Select input
             try self.root.selectInput(self.display, ROOT_MASK);
@@ -147,12 +156,16 @@ pub fn WindowManager(comptime config: Config) type {
             //TODO: Recover from error and restart
         }
 
-        fn handleError(self: *Self) void {
+        fn handleError(self: *Self, _: ?*x11.Display, _: [*c]x11.XErrorEvent) void {
             std.log.err("in error handler", .{});
             switch (self.state) {
-                .initial => unreachable,
+                .initial => {
+                    self.state = .stopping;
+                    std.log.err("Another wm is running", .{});
+                },
                 .running => unreachable,
                 .recover => unreachable,
+                .stopping => {},
             }
         }
 
@@ -173,9 +186,19 @@ pub fn WindowManager(comptime config: Config) type {
             };
         }
 
-        fn createWindow(_: *anyopaque, _: x11.Window) Error!void {}
+        fn createWindow(ptr: *anyopaque, _: x11.Window) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            _ = self;
+        }
 
         fn destroyWindow(_: *anyopaque, _: x11.Window) Error!void {}
+
+        fn x11ErrorHandler(display: ?*x11.Display, event: [*c]x11.XErrorEvent) callconv(.C) c_int {
+            if (Self.global) |wm| {
+                wm.handleError(display, event);
+            }
+            return 0;
+        }
     };
 }
 
