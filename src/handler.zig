@@ -28,18 +28,18 @@ pub const Default = &[_]HandlerEntry{
     // .{ .event = x11.DestroyNotify, .handlers = &[_]Handler{
     //     keyPress,
     // } },
-    // .{ .event = x11.MotionNotify, .handlers = &[_]Handler{
-    //     motionNotify,
-    // } },
+    .{ .event = x11.MotionNotify, .handlers = &[_]Handler{
+        motionNotify,
+    } },
     // .{ .event = x11.EnterNotify, .handlers = &[_]Handler{
     //     enterNotify,
     // } },
-    // .{ .event = x11.ButtonPress, .handlers = &[_]Handler{
-    //     buttonPress,
-    // } },
-    // .{ .event = x11.ButtonRelease, .handlers = &[_]Handler{
-    //     buttonRelease,
-    // } },
+    .{ .event = x11.ButtonPress, .handlers = &[_]Handler{
+        buttonPress,
+    } },
+    .{ .event = x11.ButtonRelease, .handlers = &[_]Handler{
+        buttonRelease,
+    } },
 };
 
 pub fn mapRequest(ctx: *const Context, event: *const x11.XEvent) Error!void {
@@ -61,17 +61,22 @@ pub fn keyPress(ctx: *const Context, event: *const x11.XEvent) Error!void {
 //     // const casted = @as(*const x11.XEnterWindowEvent, @ptrCast(event));
 // }
 
-// pub fn motionNotify(wm: *WM, event: *const x11.XEvent) void {
-//     // const casted = @as(*const x11.XMotionEvent, @ptrCast(event));
-// }
+pub fn motionNotify(_: *const Context, event: *const x11.XEvent) Error!void {
+    const casted = @as(*const x11.XMotionEvent, @ptrCast(event));
+    std.log.info("motion: {}:{}", .{ casted.x, casted.y });
+}
 
-// pub fn buttonPress(wm: *WM, event: *const x11.XEvent) void {
-//     // const casted = @as(*const x11.XButtonPressedEvent, @ptrCast(event));
-// }
+pub fn buttonPress(ctx: *const Context, _: *const x11.XEvent) Error!void {
+    // const casted = @as(*const x11.XButtonPressedEvent, @ptrCast(event));
+    std.log.info("Button press", .{});
+    try ctx.setInput(.pointer);
+}
 
-// pub fn buttonRelease(wm: *WM, event: *const x11.XEvent) void {
-//     // const casted = @as(*const x11.XButtonReleasedEvent, @ptrCast(event));
-// }
+pub fn buttonRelease(ctx: *const Context, _: *const x11.XEvent) Error!void {
+    // const casted = @as(*const x11.XButtonReleasedEvent, @ptrCast(event));
+    std.log.info("Button release", .{});
+    try ctx.setInput(.default);
+}
 
 // pub fn destroyNotify(wm: *WM, event: *const x11.XEvent) void {
 //     // const casted = @as(*const x11.XDestroyWindowEvent, @ptrCast(event));

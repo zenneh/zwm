@@ -37,14 +37,16 @@ master: usize,
 handlers: []const handler.HandlerEntry,
 
 // User defined keyboard shortcuts
-shortcuts: []const shortcut.Shortcut,
+keys: []const shortcut.Shortcut,
+
+buttons: []const shortcut.Shortcut,
 
 pub const Default = Config{
     // Using a 9-bit workspace
     .workspaces = u9,
 
     // Default layout when opening a new workspace
-    .layout = &layouts.monocle,
+    .layout = &layouts.tile,
 
     .master = 0,
     // TODO: Theme
@@ -58,7 +60,7 @@ pub const Default = Config{
     // All event handlers
     .handlers = handler.Default,
 
-    .shortcuts = &[_]shortcut.Shortcut{
+    .keys = &[_]shortcut.Shortcut{
         // Tag window
         SC(ModLayer1, x11.XK_1, action.tag, .{0}),
         SC(ModLayer1, x11.XK_2, action.tag, .{1}),
@@ -94,5 +96,8 @@ pub const Default = Config{
         SC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
 
         SC(ModLayer0, x11.XK_q, action.kill, .{}),
+    },
+    .buttons = &[_]shortcut.Shortcut{
+        SC(ModLayer0, x11.Button1, action.move, .{}),
     },
 };

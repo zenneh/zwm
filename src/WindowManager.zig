@@ -14,9 +14,10 @@ const debug = std.debug;
 
 const Allocator = std.mem.Allocator;
 
-const ROOT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask;
+const ROOT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask;
 const KEY_MASK = x11.KeyPressMask | x11.KeyReleaseMask;
-const BUTTON_MASK = x11.ButtonPressMask | x11.KeyReleaseMask;
+const BUTTON_MASK = x11.ButtonPressMask | x11.ButtonReleaseMask;
+const POINTER_MASK = x11.PointerMotionMask | BUTTON_MASK;
 const NUM_EVENTS = x11.LASTEvent;
 // pub const WM_EVENT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.KeyPressMask | x11.EnterWindowMask | x11.LeaveWindowMask | x11.FocusChangeMask | x11.PropertyChangeMask | x11.StructureNotifyMask;
 // pub const WINDOW_EVENT_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
@@ -44,6 +45,11 @@ const State = enum {
     stopping,
 };
 
+const Input = enum {
+    default,
+    pointer,
+};
+
 pub const Context = struct {
     ptr: *anyopaque,
 
@@ -54,6 +60,8 @@ pub const Context = struct {
         viewWorkspace: *const fn (ptr: *anyopaque, index: usize) Error!void,
         tagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
         toggleTagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
+
+        setInput: *const fn (ptr: *anyopaque, mode: Input) Error!void,
 
         check: *const fn (ptr: *anyopaque) Error!void,
         focusNextWindow: *const fn (ptr: *anyopaque) Error!void,
@@ -66,6 +74,10 @@ pub const Context = struct {
     },
 
     display: *Display,
+
+    pub fn setInput(self: Context, mode: Input) Error!void {
+        try self.vtable.setInput(self.ptr, mode);
+    }
 
     pub fn createWindow(self: Context, x11_window: x11.Window) Error!void {
         try self.vtable.createWindow(self.ptr, x11_window);
@@ -153,11 +165,14 @@ pub fn WindowManager(comptime config: Config) type {
         // error_handler: comptime
         state: State,
 
+        // Input state for handling resizing and moving
+        input: Input,
+
         // For each XEvent we allocate space for the handlers
         const event_handlers = util.createEventHandlers(config.handlers);
 
         // A shortcut handler which will execute the actions associated to the shortcuts
-        const shortcut_handler = util.createShortcutHandler(config.shortcuts);
+        const shortcut_handler = util.createShortcutHandler(config.keys);
 
         // Layouts
         var layouts = util.createLayouts(Mask, config.layout);
@@ -168,7 +183,8 @@ pub fn WindowManager(comptime config: Config) type {
         // Global reference to the current window manager for error handling
         var global: ?*Self = null;
 
-        const shortcuts = config.shortcuts;
+        const keys = config.keys;
+        const buttons = config.buttons;
 
         const Self = @This();
 
@@ -193,6 +209,7 @@ pub fn WindowManager(comptime config: Config) type {
                 .workspace_mask = WorkspaceMask.init(0),
                 .current_workspace = 0,
                 .state = .initial,
+                .input = .default,
             };
         }
 
@@ -266,6 +283,7 @@ pub fn WindowManager(comptime config: Config) type {
                 .display = self.display,
                 .ptr = self,
                 .vtable = .{
+                    .setInput = setInput,
                     .createWindow = createWindow,
                     .destroyWindow = destroyWindow,
                     .handleKeyEvent = handleKeyEvent,
@@ -356,9 +374,26 @@ pub fn WindowManager(comptime config: Config) type {
             while (it) |node| : (it = node.next) {
                 if (node == self.current_window) {
                     try node.data.focus(self.display);
+                    self.grabButtons(node);
                 } else {
                     try node.data.unfocus(self.display);
                 }
+            }
+        }
+
+        fn setInput(ptr: *anyopaque, mode: Input) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            self.input = mode;
+            //           	if (XGrabPointer(dpy, root, False, MOUSEMASK, GrabModeAsync, GrabModeAsync,
+            // None, cursor[CurMove]->cursor, CurrentTime) != GrabSuccess)
+
+            switch (mode) {
+                .default => {
+                    _ = x11.XUngrabPointer(self.display, x11.CurrentTime);
+                },
+                .pointer => {
+                    _ = x11.XGrabPointer(self.display, self.root.handle, x11.False, POINTER_MASK, x11.GrabModeAsync, x11.GrabModeAsync, x11.None, x11.None, x11.CurrentTime);
+                },
             }
         }
 
@@ -536,6 +571,15 @@ pub fn WindowManager(comptime config: Config) type {
             return 0;
         }
 
+        fn grabButtons(self: *Self, node: *WindowList.Node) void {
+            _ = x11.XUngrabButton(self.display, x11.AnyButton, x11.AnyModifier, self.root.handle);
+
+            for (Self.buttons) |button| {
+                std.log.debug("grabbing button {d}", .{button.key});
+                _ = x11.XGrabButton(self.display, @intCast(button.key), button.mod, node.data.handle, x11.False, BUTTON_MASK, x11.GrabModeAsync, x11.GrabModeSync, x11.None, x11.None);
+            }
+        }
+
         fn grabKeys(self: *Self) void {
             var s: c_int = 0;
             var e: c_int = 0;
@@ -552,7 +596,7 @@ pub fn WindowManager(comptime config: Config) type {
             if (syms == null) return;
 
             while (k <= e) : (k += 1) {
-                for (Self.shortcuts) |shortcut| {
+                for (Self.keys) |shortcut| {
                     if (shortcut.key == syms.?[@intCast((k - s) * skip)]) {
                         std.log.debug("grabbing key {d}", .{shortcut.key});
                         _ = x11.XGrabKey(self.display, k, shortcut.mod, self.root.handle, x11.True, x11.GrabModeAsync, x11.GrabModeAsync);
@@ -574,13 +618,11 @@ pub fn WindowManager(comptime config: Config) type {
 
             var it = self.windows.first;
             while (it) |node| : (it = node.next) {
-                try writer.print(" - handle: {}, mask: {b:9>}, mode: {any}", .{ node.data.handle, node.data.mask.mask, node.data.mode });
+                try writer.print(" - handle: {}, mask: {b:9>}, mode: {any}\n", .{ node.data.handle, node.data.mask.mask, node.data.mode });
             }
         }
     };
 }
-
-// pub fn grabButtons(_: *Self) void {}
 
 // pub fn grabKeys(wm: *Self) void {
 //     var s: c_int = 0;
@@ -606,42 +648,6 @@ pub fn WindowManager(comptime config: Config) type {
 //     }
 
 //     _ = x11.XFree(@ptrCast(syms));
-// }
-
-// pub fn currentWorkspace(self: *Self) *Workspace {
-//     return &self.workspaces[self.current_workspace];
-// }
-
-// fn getNodeByHandle(self: *Self, x11_window: x11.Window) ?*WindowList.Node {
-//     var it = self.windows.first;
-//     while (it) |node| : (it = node.next) {
-//         if (node.data.handle == x11_window) return node;
-//     }
-//     return null;
-// }
-
-// pub fn createWindow(self: *Self, x11_window: x11.Window) !void {
-//     if (self.getNodeByHandle(x11_window) != null) return;
-
-//     const node = try self.allocator.create(WindowList.Node);
-//     errdefer self.allocator.destroy(node);
-
-//     const window = Window.init(x11_window);
-//     try window.selectInput(self.display, WINDOW_EVENT_MASK);
-
-//     node.* = WindowList.Node{
-//         .data = window,
-//         .next = null,
-//         .prev = null,
-//     };
-
-//     node.data.selectInput(self.display, WINDOW_EVENT_MASK) catch unreachable;
-//     node.data.map(self.display) catch unreachable;
-
-//     self.windows.append(node);
-
-//     try self.currentWorkspace().tagWindow(&node.data);
-//     self.currentWorkspace().arrangeWindows(&self.root.alignment, self.display) catch unreachable;
 // }
 
 // pub fn destroyWindow(self: *Self, x11_window: x11.Window) !void {
