@@ -68,6 +68,7 @@ pub const Context = struct {
         viewWorkspace: *const fn (ptr: *anyopaque, index: usize) Error!void,
         tagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
         toggleTagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
+        toggleMode: *const fn (ptr: *anyopaque, mode: window.Mode) Error!void,
 
         moveWindow: *const fn (ptr: *anyopaque, pos: layout.Pos) Error!void,
         resizeWindow: *const fn (ptr: *anyopaque, width: u32, height: u32) Error!void,
@@ -91,6 +92,10 @@ pub const Context = struct {
     input: Input,
 
     action: Action,
+
+    pub fn toggleMode(self: Context, mode: window.Mode) Error!void {
+        try self.vtable.toggleMode(self.ptr, mode);
+    }
 
     pub fn moveWindow(self: Context, pos: layout.Pos) Error!void {
         try self.vtable.moveWindow(self.ptr, pos);
@@ -333,6 +338,7 @@ pub fn WindowManager(comptime config: Config) type {
                     .moveWindow = moveWindow,
                     .resizeWindow = resizeWindow,
                     .focusWindow = focusWindow,
+                    .toggleMode = toggleMode,
                     .destroyWindow = destroyWindow,
                     .handleKeyEvent = handleKeyEvent,
                     .handleButtonEvent = handleButtonEvent,
@@ -368,6 +374,10 @@ pub fn WindowManager(comptime config: Config) type {
                     try node.data.map(self.display);
                 } else {
                     try node.data.unmap(self.display);
+                }
+
+                if (node.data.mode == .floating and is_active) {
+                    try node.data.raise(self.display);
                 }
 
                 // Only pass default windows to layout
@@ -416,6 +426,16 @@ pub fn WindowManager(comptime config: Config) type {
             }
 
             return null;
+        }
+
+        fn toggleMode(ptr: *anyopaque, mode: window.Mode) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            if (self.current_window) |node| {
+                const current_mode = node.data.mode;
+                node.data.setMode(if (current_mode == mode) .default else mode);
+
+                try self.arrange();
+            }
         }
 
         fn focus(self: *Self) Error!void {

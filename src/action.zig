@@ -2,6 +2,7 @@ const std = @import("std");
 const util = @import("util.zig");
 const x11 = @import("X11.zig");
 const layout = @import("layout.zig");
+const window = @import("window.zig");
 
 const window_manager = @import("WindowManager.zig");
 
@@ -28,7 +29,9 @@ pub fn toggleTag(ctx: *Context, index: usize) Error!void {
     try ctx.toggleTagWindow(index);
 }
 
-pub fn toggleFloating(_: *Context) Error!void {}
+pub fn toggleMode(ctx: *Context, mode: window.Mode) Error!void {
+    try ctx.toggleMode(mode);
+}
 
 pub fn check(ctx: *Context) Error!void {
     try ctx.check();

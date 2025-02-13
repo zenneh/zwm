@@ -92,6 +92,10 @@ pub fn Window(comptime T: type) type {
             if (result == x11.False) return Error.ResizeFailed;
         }
 
+        pub fn raise(self: *const Self, display: *Display) Error!void {
+            if (x11.XRaiseWindow(display, self.handle) == x11.False) return Error.FocusFailed;
+        }
+
         pub fn moveResize(self: *const Self, display: *Display, x: i32, y: i32, width: u32, height: u32) Error!void {
             const result = x11.XMoveResizeWindow(display, self.handle, @intCast(x), @intCast(y), @intCast(width), @intCast(height));
             if (result == x11.False) return Error.MoveResizeFailed;
@@ -99,7 +103,6 @@ pub fn Window(comptime T: type) type {
 
         pub fn focus(self: *const Self, display: *Display) Error!void {
             if (x11.XSetInputFocus(display, self.handle, x11.RevertToPointerRoot, x11.CurrentTime) == x11.False) return Error.FocusFailed;
-            if (x11.XRaiseWindow(display, self.handle) == x11.False) return Error.FocusFailed;
             if (x11.XSetWindowBorderWidth(display, self.handle, Border.width) == x11.False) return Error.FocusFailed;
             if (x11.XSetWindowBorder(display, self.handle, Border.focused_color) == x11.False) return Error.FocusFailed;
         }

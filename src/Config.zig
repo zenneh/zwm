@@ -1,6 +1,7 @@
 const layouts = @import("layout.zig").layouts;
 const shortcut = @import("shortcut.zig");
 
+const Mode = @import("window.zig").Mode;
 const Layout = @import("layout.zig").Layout;
 const SC = shortcut.createShortCut;
 
@@ -50,7 +51,7 @@ pub const Default = Config{
 
     .master = 0,
     // TODO: Theme
-    //
+
     // TODO: Bar (configurable workspaces + custom)
 
     // TODO: Fonts (for displaying in the bar)
@@ -89,7 +90,7 @@ pub const Default = Config{
         SC(ModLayer1, x11.XK_o, action.incrementMaster, .{-1}),
 
         // // Window configuration
-        // SC(ModLayer1, x11.XK_p, action.toggleFloating, .{}),
+        SC(ModLayer1, x11.XK_p, action.toggleMode, .{Mode.floating}),
 
         // // Processes
         SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
