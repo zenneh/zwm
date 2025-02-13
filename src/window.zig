@@ -29,7 +29,7 @@ const Display = x11.Display;
 // TODO: Make this configurable in the config
 const Border = struct {
     const width: u32 = 1;
-    const focused_color: u64 = 0x00_00_00_88;
+    const focused_color: u64 = 0x00_55_00_88;
     const unfocused_color: u64 = 0x00_00_00_55;
 };
 

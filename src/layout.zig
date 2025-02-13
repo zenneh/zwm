@@ -49,35 +49,58 @@ const Monocle = struct {
 };
 
 const Tile = struct {
+    /// Arranges windows in a tiling layout with a master area and stack area
+    /// master_count determines how many windows appear in the master area
     pub fn arrange(ctx: *const Context, alignments: []*Alignment) void {
+        // Early returns for empty or single window cases
         if (alignments.len == 0) return;
         if (alignments.len == 1) {
             alignments[0].* = ctx.root.*;
+            return;
         }
 
-        var x: i32 = 0;
-        // var y: i32 = 0;
-        const width: u32 = if (alignments.len <= ctx.index) ctx.root.width else ctx.root.width / 2;
-        var height: u32 = undefined;
-        const ctxi = @as(u32, @intCast(ctx.index + 1));
+        // Calculate master area properties
+        const master_count: u32 = @intCast(@min(ctx.index + 1, alignments.len));
+        const use_split_layout = alignments.len > master_count;
 
-        for (alignments, 0..) |al, index| {
-            if (index <= ctx.index) {
-                height = ctx.root.height / ctxi;
-                al.* = Alignment{
-                    .pos = Pos{ .x = x, .y = @intCast(height * index) },
-                    .width = width,
-                    .height = ctx.root.height / ctxi,
-                };
-            } else {
-                x = @intCast(ctx.root.width / 2);
-                height = @intCast(ctx.root.height / (alignments.len - ctx.index));
-                al.* = Alignment{
-                    .pos = Pos{ .x = x, .y = @intCast((ctx.index - index) * height) },
-                    .width = width,
-                    .height = @intCast(ctx.root.height / ctx.index),
-                };
-            }
+        // Calculate basic dimensions
+        const total_width = ctx.root.width;
+        const total_height = ctx.root.height;
+        const master_width = if (use_split_layout) total_width / 2 else total_width;
+
+        // Prevent division by zero for height calculations
+        const master_height: u32 = if (master_count > 0)
+            @intCast(total_height / master_count)
+        else
+            total_height;
+
+        const stack_count: u32 = @intCast(alignments.len - master_count);
+        const stack_height: u32 = if (stack_count > 0) total_height / stack_count else total_height;
+
+        // Arrange windows in master area
+        var i: usize = 0;
+        while (i < master_count) : (i += 1) {
+            alignments[i].* = .{
+                .pos = .{
+                    .x = 0,
+                    .y = @intCast(i * master_height),
+                },
+                .width = @intCast(master_width),
+                .height = @intCast(master_height),
+            };
+        }
+
+        // Arrange windows in stack area
+        while (i < alignments.len) : (i += 1) {
+            const stack_index = i - master_count;
+            alignments[i].* = .{
+                .pos = .{
+                    .x = @intCast(master_width),
+                    .y = @intCast(stack_index * stack_height),
+                },
+                .width = @intCast(master_width),
+                .height = @intCast(stack_height),
+            };
         }
     }
 };

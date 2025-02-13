@@ -60,6 +60,9 @@ pub const Context = struct {
         focusPrevWindow: *const fn (ptr: *anyopaque) Error!void,
         setLayout: *const fn (ptr: *anyopaque, l: *const layout.Layout) Error!void,
         incrementMaster: *const fn (ptr: *anyopaque, amount: i8) Error!void,
+
+        process: *const fn (ptr: *anyopaque, args: []const []const u8) Error!void,
+        kill: *const fn (ptr: *anyopaque) Error!void,
     },
 
     display: *Display,
@@ -107,6 +110,12 @@ pub const Context = struct {
     pub fn incrementMaster(self: *Context, amount: i8) Error!void {
         try self.vtable.incrementMaster(self.ptr, amount);
     }
+    pub fn process(self: *Context, args: []const []const u8) Error!void {
+        try self.vtable.process(self.ptr, args);
+    }
+    pub fn kill(self: *Context) Error!void {
+        try self.vtable.kill(self.ptr);
+    }
 };
 
 pub fn WindowManager(comptime config: Config) type {
@@ -144,18 +153,17 @@ pub fn WindowManager(comptime config: Config) type {
         // error_handler: comptime
         state: State,
 
-        // How many window to display on the master side
-        // TODO: make this workspace specific with (min 0) and (max workspace windows.len)
-        master: usize,
-
         // For each XEvent we allocate space for the handlers
         const event_handlers = util.createEventHandlers(config.handlers);
 
         // A shortcut handler which will execute the actions associated to the shortcuts
         const shortcut_handler = util.createShortcutHandler(config.shortcuts);
 
-        // layouts:
+        // Layouts
         var layouts = util.createLayouts(Mask, config.layout);
+
+        // Master counts
+        var master_counts = util.createMasterCounts(Mask);
 
         // Global reference to the current window manager for error handling
         var global: ?*Self = null;
@@ -185,7 +193,6 @@ pub fn WindowManager(comptime config: Config) type {
                 .workspace_mask = WorkspaceMask.init(0),
                 .current_workspace = 0,
                 .state = .initial,
-                .master = config.master,
             };
         }
 
@@ -270,6 +277,8 @@ pub fn WindowManager(comptime config: Config) type {
                     .focusPrevWindow = focusPrevWindow,
                     .setLayout = setLayout,
                     .incrementMaster = incrementMaster,
+                    .process = process,
+                    .kill = kill,
                 },
             };
         }
@@ -305,7 +314,7 @@ pub fn WindowManager(comptime config: Config) type {
             }
 
             Self.layouts[self.current_workspace].arrange(&.{
-                .index = self.master,
+                .index = Self.master_counts[self.current_workspace],
                 .root = &self.root.alignment,
             }, alignments[0..index]);
 
@@ -364,8 +373,10 @@ pub fn WindowManager(comptime config: Config) type {
 
             try node.data.map(self.display);
 
-            self.windows.append(node);
+            self.windows.prepend(node);
             self.current_window = node;
+
+            try self.focus();
 
             try self.arrange();
         }
@@ -377,12 +388,16 @@ pub fn WindowManager(comptime config: Config) type {
                 try node.data.destroy(self.display);
                 self.windows.remove(node);
 
-                if (self.current_window == node) {
-                    self.current_window = self.findFirstActiveNode();
-                }
+                if (node.next) |n| {
+                    self.current_window = n;
+                } else if (node.prev) |p| {
+                    self.current_window = p;
+                } else self.current_window = self.findFirstActiveNode();
 
                 self.allocator.destroy(node);
             }
+
+            try self.focus();
 
             try self.arrange();
         }
@@ -423,6 +438,7 @@ pub fn WindowManager(comptime config: Config) type {
             while (it) |node| : (it = node.next) {
                 if (!node.data.mask.has(self.current_workspace)) continue;
                 self.current_window = node;
+                break;
             }
 
             try self.focus();
@@ -435,6 +451,7 @@ pub fn WindowManager(comptime config: Config) type {
             while (it) |node| : (it = node.prev) {
                 if (!node.data.mask.has(self.current_workspace)) continue;
                 self.current_window = node;
+                break;
             }
 
             try self.focus();
@@ -443,11 +460,68 @@ pub fn WindowManager(comptime config: Config) type {
         fn setLayout(ptr: *anyopaque, l: *const layout.Layout) Error!void {
             const self: *Self = @ptrCast(@alignCast(ptr));
             Self.layouts[self.current_workspace] = l;
+
+            try self.arrange();
         }
 
         fn incrementMaster(ptr: *anyopaque, amount: i8) Error!void {
             const self: *Self = @ptrCast(@alignCast(ptr));
-            self.master = @intCast(@as(i8, @intCast(self.master)) + amount);
+
+            var window_count: usize = 0;
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                if (node.data.mask.has(self.current_workspace)) window_count += 1;
+            }
+
+            // Get current master count
+            const current_master = Self.master_counts[self.current_workspace];
+
+            if (window_count == 0) return;
+
+            var new_master: i32 = @as(i32, @intCast(current_master)) + amount;
+
+            if (new_master < 0) {
+                new_master = 0;
+            } else if (new_master > @as(i32, @intCast(window_count - 1))) {
+                new_master = @intCast(window_count - 1);
+            }
+
+            Self.master_counts[self.current_workspace] = @intCast(new_master);
+
+            try self.arrange();
+        }
+
+        fn process(ptr: *anyopaque, args: []const []const u8) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            const display = std.mem.span(x11.DisplayString(self.display));
+
+            var env_map = std.process.EnvMap.init(self.allocator);
+            defer env_map.deinit();
+
+            env_map.put("DISPLAY", display) catch return;
+
+            util.spawn_process(&env_map, args, self.allocator) catch return;
+        }
+
+        fn kill(ptr: *anyopaque) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+
+            if (self.current_window) |node| {
+                try node.data.destroy(self.display);
+                self.windows.remove(node);
+
+                if (node.next) |n| {
+                    self.current_window = n;
+                } else if (node.prev) |p| {
+                    self.current_window = p;
+                } else self.current_window = self.findFirstActiveNode();
+
+                self.allocator.destroy(node);
+            }
+
+            try self.focus();
+
+            try self.arrange();
         }
 
         fn handleKeyEvent(ptr: *anyopaque, event: *const x11.XKeyEvent) Error!void {

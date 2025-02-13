@@ -14,16 +14,14 @@ const Alloc = std.mem.Allocator;
 pub fn createLayoutsType(comptime T: type) type {
     return @TypeOf([@bitSizeOf(T)]*const layout.Layout);
 }
+
 pub fn createLayouts(comptime T: type, default: *const layout.Layout) [@bitSizeOf(T)]*const layout.Layout {
     return .{default} ** @bitSizeOf(T);
 }
-// pub fn createLayouts(comptime T: type, default: *const layout.Layout) []*const layout.Layout {
-//     const bits = @bitSizeOf(T);
-//     return comptime init: {
-//         const layouts: [bits]*const layout.Layout = .{default} ** bits;
-//         break :init &layouts[0..];
-//     };
-// }
+
+pub fn createMasterCounts(comptime T: type) [@bitSizeOf(T)]usize {
+    return .{0} ** @bitSizeOf(T);
+}
 
 pub fn createCurrentWorkspaceType(comptime T: type) type {
     const bits = @bitSizeOf(T);

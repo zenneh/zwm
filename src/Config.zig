@@ -90,9 +90,9 @@ pub const Default = Config{
         // SC(ModLayer1, x11.XK_p, action.toggleFloating, .{}),
 
         // // Processes
-        // SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
-        // SC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
+        SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
+        SC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
 
-        // SC(ModLayer0, x11.XK_q, action.kill, .{}),
+        SC(ModLayer0, x11.XK_q, action.kill, .{}),
     },
 };

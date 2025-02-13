@@ -49,6 +49,13 @@ pub fn incrementMaster(ctx: *Context, amount: i8) Error!void {
     try ctx.incrementMaster(amount);
 }
 
+pub fn process(ctx: *Context, args: []const []const u8) Error!void {
+    try ctx.process(args);
+}
+
+pub fn kill(ctx: *Context) Error!void {
+    try ctx.kill();
+}
 // fn rearrangeWorkspace(wm: *WindowManager) void {
 //     const workspace = &wm.workspaces[wm.current_workspace];
 //     workspace.arrangeWindows(&wm.root.alignment, wm.display) catch return;
@@ -172,17 +179,6 @@ pub fn incrementMaster(ctx: *Context, amount: i8) Error!void {
 //     const workspace = &wm.workspaces[wm.current_workspace];
 //     workspace.layout = layout;
 //     workspace.arrangeWindows(&wm.root.alignment, wm.display) catch return;
-// }
-
-// pub fn process(wm: *WindowManager, comptime args: []const []const u8) void {
-//     const display = std.mem.span(x11.DisplayString(wm.display));
-
-//     var env_map = std.process.EnvMap.init(std.heap.c_allocator);
-//     defer env_map.deinit();
-
-//     env_map.put("DISPLAY", display) catch return;
-
-//     util.spawn_process(&env_map, args, wm.allocator) catch return;
 // }
 
 // pub fn incrementLayout(wm: *WindowManager, amount: usize) void {
