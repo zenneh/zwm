@@ -31,9 +31,9 @@ pub const Default = &[_]HandlerEntry{
     .{ .event = x11.MotionNotify, .handlers = &[_]Handler{
         motionNotify,
     } },
-    // .{ .event = x11.EnterNotify, .handlers = &[_]Handler{
-    //     enterNotify,
-    // } },
+    .{ .event = x11.EnterNotify, .handlers = &[_]Handler{
+        enterNotify,
+    } },
     .{ .event = x11.ButtonPress, .handlers = &[_]Handler{
         buttonPress,
     } },
@@ -57,25 +57,42 @@ pub fn keyPress(ctx: *const Context, event: *const x11.XEvent) Error!void {
     try ctx.handleKeyEvent(casted);
 }
 //
-// pub fn enterNotify(wm: *WM, event: *const x11.XEvent) void {
-//     // const casted = @as(*const x11.XEnterWindowEvent, @ptrCast(event));
-// }
-
-pub fn motionNotify(_: *const Context, event: *const x11.XEvent) Error!void {
-    const casted = @as(*const x11.XMotionEvent, @ptrCast(event));
-    std.log.info("motion: {}:{}", .{ casted.x, casted.y });
+pub fn enterNotify(ctx: *const Context, event: *const x11.XEvent) Error!void {
+    const casted = @as(*const x11.XEnterWindowEvent, @ptrCast(event));
+    std.log.info("Enter notify {}", .{casted.window});
+    try ctx.focusWindow(casted.window);
 }
 
-pub fn buttonPress(ctx: *const Context, _: *const x11.XEvent) Error!void {
-    // const casted = @as(*const x11.XButtonPressedEvent, @ptrCast(event));
+pub fn motionNotify(ctx: *const Context, event: *const x11.XEvent) Error!void {
+    const casted = @as(*const x11.XMotionEvent, @ptrCast(event));
+    std.log.info("motion: {}:{} - {}:{}", .{ casted.x, casted.y, casted.x_root, casted.y_root });
+    std.log.info("{any}", .{ctx.action});
+    switch (ctx.action) {
+        .arrange => {},
+        .resize => {
+            @panic("Resize not implemented");
+        },
+        .move => {
+            std.log.info("moving window: {}:{}", .{ casted.x, casted.y });
+            try ctx.moveWindow(.{ .x = casted.x, .y = casted.y });
+        },
+    }
+}
+
+pub fn buttonPress(ctx: *const Context, event: *const x11.XEvent) Error!void {
+    const casted = @as(*const x11.XButtonPressedEvent, @ptrCast(event));
     std.log.info("Button press", .{});
-    try ctx.setInput(.pointer);
+    try ctx.setInput(.{ .pointer = .{ .x = casted.x, .y = casted.y } });
+    try ctx.handleButtonEvent(casted);
 }
 
 pub fn buttonRelease(ctx: *const Context, _: *const x11.XEvent) Error!void {
     // const casted = @as(*const x11.XButtonReleasedEvent, @ptrCast(event));
     std.log.info("Button release", .{});
     try ctx.setInput(.default);
+
+    // restore action state
+    try ctx.setAction(.arrange);
 }
 
 // pub fn destroyNotify(wm: *WM, event: *const x11.XEvent) void {

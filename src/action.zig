@@ -28,6 +28,8 @@ pub fn toggleTag(ctx: *Context, index: usize) Error!void {
     try ctx.toggleTagWindow(index);
 }
 
+pub fn toggleFloating(_: *Context) Error!void {}
+
 pub fn check(ctx: *Context) Error!void {
     try ctx.check();
 }
@@ -57,7 +59,9 @@ pub fn kill(ctx: *Context) Error!void {
     try ctx.kill();
 }
 
-pub fn move(_: *Context) Error!void {}
+pub fn move(ctx: *Context) Error!void {
+    try ctx.setAction(.move);
+}
 // fn rearrangeWorkspace(wm: *WindowManager) void {
 //     const workspace = &wm.workspaces[wm.current_workspace];
 //     workspace.arrangeWindows(&wm.root.alignment, wm.display) catch return;

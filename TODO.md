@@ -1,5 +1,5 @@
 # Current list of tasks
-- [ ] Implement keyboard button handlers
+- [x] Implement keyboard button handlers
 - [ ] Implement floating windows
 - [ ] Implement window movement
 - [ ] Implement window resizing

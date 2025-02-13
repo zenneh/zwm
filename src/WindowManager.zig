@@ -14,7 +14,8 @@ const debug = std.debug;
 
 const Allocator = std.mem.Allocator;
 
-const ROOT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask;
+const ROOT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.EnterWindowMask;
+const WINDOW_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
 const KEY_MASK = x11.KeyPressMask | x11.KeyReleaseMask;
 const BUTTON_MASK = x11.ButtonPressMask | x11.ButtonReleaseMask;
 const POINTER_MASK = x11.PointerMotionMask | BUTTON_MASK;
@@ -45,9 +46,15 @@ const State = enum {
     stopping,
 };
 
-const Input = enum {
+const Input = union(enum) {
     default,
-    pointer,
+    pointer: layout.Pos,
+};
+
+const Action = enum {
+    arrange,
+    move,
+    resize,
 };
 
 pub const Context = struct {
@@ -57,13 +64,19 @@ pub const Context = struct {
         createWindow: *const fn (ptr: *anyopaque, x11_window: x11.Window) Error!void,
         destroyWindow: *const fn (ptr: *anyopaque, x11_window: x11.Window) Error!void,
         handleKeyEvent: *const fn (ptr: *anyopaque, event: *const x11.XKeyEvent) Error!void,
+        handleButtonEvent: *const fn (ptr: *anyopaque, event: *const x11.XButtonEvent) Error!void,
         viewWorkspace: *const fn (ptr: *anyopaque, index: usize) Error!void,
         tagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
         toggleTagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
 
+        moveWindow: *const fn (ptr: *anyopaque, pos: layout.Pos) Error!void,
+        resizeWindow: *const fn (ptr: *anyopaque, width: u32, height: u32) Error!void,
+
         setInput: *const fn (ptr: *anyopaque, mode: Input) Error!void,
+        setAction: *const fn (ptr: *anyopaque, mode: Action) Error!void,
 
         check: *const fn (ptr: *anyopaque) Error!void,
+        focusWindow: *const fn (ptr: *anyopaque, x11_window: x11.Window) Error!void,
         focusNextWindow: *const fn (ptr: *anyopaque) Error!void,
         focusPrevWindow: *const fn (ptr: *anyopaque) Error!void,
         setLayout: *const fn (ptr: *anyopaque, l: *const layout.Layout) Error!void,
@@ -75,8 +88,23 @@ pub const Context = struct {
 
     display: *Display,
 
+    input: Input,
+
+    action: Action,
+
+    pub fn moveWindow(self: Context, pos: layout.Pos) Error!void {
+        try self.vtable.moveWindow(self.ptr, pos);
+    }
+    pub fn resizeWindow(self: Context, width: u32, height: u32) Error!void {
+        try self.vtable.resizeWindow(self.ptr, width, height);
+    }
+
     pub fn setInput(self: Context, mode: Input) Error!void {
         try self.vtable.setInput(self.ptr, mode);
+    }
+
+    pub fn setAction(self: Context, mode: Action) Error!void {
+        try self.vtable.setAction(self.ptr, mode);
     }
 
     pub fn createWindow(self: Context, x11_window: x11.Window) Error!void {
@@ -87,8 +115,16 @@ pub const Context = struct {
         try self.vtable.destroyWindow(self.ptr, x11_window);
     }
 
+    pub fn focusWindow(self: Context, x11_window: x11.Window) Error!void {
+        try self.vtable.focusWindow(self.ptr, x11_window);
+    }
+
     pub fn handleKeyEvent(self: Context, event: *const x11.XKeyEvent) Error!void {
         try self.vtable.handleKeyEvent(self.ptr, event);
+    }
+
+    pub fn handleButtonEvent(self: Context, event: *const x11.XButtonEvent) Error!void {
+        try self.vtable.handleButtonEvent(self.ptr, event);
     }
 
     pub fn viewWorkspace(self: Context, index: usize) Error!void {
@@ -168,11 +204,16 @@ pub fn WindowManager(comptime config: Config) type {
         // Input state for handling resizing and moving
         input: Input,
 
+        // Action state for handling tiling, resizing and moving
+        action: Action,
+
         // For each XEvent we allocate space for the handlers
         const event_handlers = util.createEventHandlers(config.handlers);
 
         // A shortcut handler which will execute the actions associated to the shortcuts
-        const shortcut_handler = util.createShortcutHandler(config.keys);
+        const key_handler = util.createKeyShortcutHandler(config.keys);
+
+        const button_handler = util.createButtonShortcutHandler(config.buttons);
 
         // Layouts
         var layouts = util.createLayouts(Mask, config.layout);
@@ -210,6 +251,7 @@ pub fn WindowManager(comptime config: Config) type {
                 .current_workspace = 0,
                 .state = .initial,
                 .input = .default,
+                .action = .arrange,
             };
         }
 
@@ -280,13 +322,20 @@ pub fn WindowManager(comptime config: Config) type {
 
         pub fn context(self: *Self) Context {
             return Context{
+                .action = self.action,
+                .input = self.input,
                 .display = self.display,
                 .ptr = self,
                 .vtable = .{
                     .setInput = setInput,
+                    .setAction = setAction,
                     .createWindow = createWindow,
+                    .moveWindow = moveWindow,
+                    .resizeWindow = resizeWindow,
+                    .focusWindow = focusWindow,
                     .destroyWindow = destroyWindow,
                     .handleKeyEvent = handleKeyEvent,
+                    .handleButtonEvent = handleButtonEvent,
                     .viewWorkspace = viewWorkspace,
                     .tagWindow = tagWindow,
                     .toggleTagWindow = toggleTagWindow,
@@ -340,7 +389,7 @@ pub fn WindowManager(comptime config: Config) type {
                 std.log.debug("alignment before {any}", .{al});
             }
 
-            for (windows, 0..) |w, i| {
+            for (windows[0..index], 0..) |w, i| {
                 try w.moveResize(
                     self.display,
                     alignments[i].pos.x,
@@ -381,11 +430,23 @@ pub fn WindowManager(comptime config: Config) type {
             }
         }
 
+        fn setAction(ptr: *anyopaque, mode: Action) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+
+            switch (mode) {
+                .arrange => {
+                    try self.arrange();
+                },
+                else => {},
+            }
+
+            std.log.debug("action set to {any}", .{mode});
+
+            self.action = mode;
+        }
+
         fn setInput(ptr: *anyopaque, mode: Input) Error!void {
             const self: *Self = @ptrCast(@alignCast(ptr));
-            self.input = mode;
-            //           	if (XGrabPointer(dpy, root, False, MOUSEMASK, GrabModeAsync, GrabModeAsync,
-            // None, cursor[CurMove]->cursor, CurrentTime) != GrabSuccess)
 
             switch (mode) {
                 .default => {
@@ -394,6 +455,34 @@ pub fn WindowManager(comptime config: Config) type {
                 .pointer => {
                     _ = x11.XGrabPointer(self.display, self.root.handle, x11.False, POINTER_MASK, x11.GrabModeAsync, x11.GrabModeAsync, x11.None, x11.None, x11.CurrentTime);
                 },
+            }
+
+            self.input = mode;
+        }
+
+        fn moveAlignWindow(_: *Self, _: layout.Pos) Error!void {}
+
+        fn moveWindow(ptr: *anyopaque, pos: layout.Pos) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+
+            switch (self.input) {
+                .pointer => |p| {
+                    std.log.debug("initial {}", .{p});
+                    const new_x = pos.x - p.x;
+                    const new_y = pos.y - p.y;
+                    if (self.current_window) |w| {
+                        try w.data.focus(self.display);
+                        try w.data.move(self.display, new_x, new_y);
+                    }
+                },
+                .default => return,
+            }
+        }
+
+        fn resizeWindow(ptr: *anyopaque, width: u32, height: u32) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            if (self.current_window) |w| {
+                try w.data.resize(self.display, width, height);
             }
         }
 
@@ -405,6 +494,8 @@ pub fn WindowManager(comptime config: Config) type {
             const node = try self.allocator.create(WindowList.Node);
             node.data = Window.init(x11_window);
             node.data.mask.tag(self.current_workspace);
+
+            try node.data.selectInput(self.display, WINDOW_MASK);
 
             try node.data.map(self.display);
 
@@ -464,6 +555,15 @@ pub fn WindowManager(comptime config: Config) type {
                 }
             }
             try self.arrange();
+        }
+
+        fn focusWindow(ptr: *anyopaque, x11_window: x11.Window) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            if (self.findWindowNodeByHandle(x11_window)) |w| {
+                self.current_window = w;
+            }
+
+            try self.focus();
         }
 
         fn focusNextWindow(ptr: *anyopaque) Error!void {
@@ -561,7 +661,12 @@ pub fn WindowManager(comptime config: Config) type {
 
         fn handleKeyEvent(ptr: *anyopaque, event: *const x11.XKeyEvent) Error!void {
             const self: *Self = @ptrCast(@alignCast(ptr));
-            try Self.shortcut_handler(@constCast(&self.context()), event);
+            try Self.key_handler(@constCast(&self.context()), event);
+        }
+
+        fn handleButtonEvent(ptr: *anyopaque, event: *const x11.XButtonEvent) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try Self.button_handler(@constCast(&self.context()), event);
         }
 
         fn x11ErrorHandler(display: ?*x11.Display, event: [*c]x11.XErrorEvent) callconv(.C) c_int {

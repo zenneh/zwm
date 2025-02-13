@@ -82,7 +82,31 @@ pub fn createEventHandlers(comptime handlers: []const handler.HandlerEntry) [x11
     };
 }
 
-pub fn createShortcutHandler(comptime shortcuts: []const shortcut.Shortcut) fn (*Context, *const x11.XKeyEvent) Error!void {
+pub fn createButtonShortcutHandler(comptime shortcuts: []const shortcut.Shortcut) fn (*Context, *const x11.XButtonEvent) Error!void {
+
+    // Validate shortcuts
+    comptime {
+        for (shortcuts, 0..) |s, index| {
+            for (shortcuts[index + 1 ..]) |other| {
+                if (s.key == other.key and s.mod == other.mod) {
+                    @compileError(std.fmt.comptimePrint("Duplicate shortcut: key {s} with modifier {s}", .{ x11.getKeyName(s.key), x11.getModifierName(s.mod) }));
+                }
+            }
+        }
+    }
+
+    return struct {
+        pub fn handle(ctx: *Context, casted: *const x11.XButtonEvent) Error!void {
+            inline for (shortcuts) |s| {
+                if (casted.state == s.mod and casted.button == s.key) {
+                    try s.invoke(ctx);
+                }
+            }
+        }
+    }.handle;
+}
+
+pub fn createKeyShortcutHandler(comptime shortcuts: []const shortcut.Shortcut) fn (*Context, *const x11.XKeyEvent) Error!void {
 
     // Validate shortcuts
     comptime {
