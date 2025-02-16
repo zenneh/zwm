@@ -20,8 +20,6 @@ const KEY_MASK = x11.KeyPressMask | x11.KeyReleaseMask;
 const BUTTON_MASK = x11.ButtonPressMask | x11.ButtonReleaseMask;
 const POINTER_MASK = x11.PointerMotionMask | BUTTON_MASK;
 const NUM_EVENTS = x11.LASTEvent;
-// pub const WM_EVENT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.KeyPressMask | x11.EnterWindowMask | x11.LeaveWindowMask | x11.FocusChangeMask | x11.PropertyChangeMask | x11.StructureNotifyMask;
-// pub const WINDOW_EVENT_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
 
 pub const Error = error{
     AlreadyRunningWM,
@@ -390,6 +388,8 @@ pub fn WindowManager(comptime config: Config) type {
                 }
             }
 
+            try self.restack(windows[0..index]);
+
             Self.layouts[self.current_workspace].arrange(&.{
                 .index = Self.master_counts[self.current_workspace],
                 .root = &self.root.alignment,
@@ -407,6 +407,34 @@ pub fn WindowManager(comptime config: Config) type {
                     alignments[i].width,
                     alignments[i].height,
                 );
+            }
+        }
+
+        fn restack(
+            self: *Self,
+            windows: []*Window,
+        ) Error!void {
+            var sibling: x11.Window = self.root.handle;
+
+            for (windows) |w| {
+                if (self.current_window) |cw| {
+                    if (&cw.data != w) {
+                        var changes = x11.XWindowChanges{
+                            .sibling = sibling,
+                            .stack_mode = x11.Above,
+                        };
+                        try w.configure(self.display, x11.CWSibling | x11.CWStackMode, &changes);
+                        sibling = w.handle;
+                    }
+                }
+            }
+
+            if (self.current_window) |cw| {
+                var changes = x11.XWindowChanges{
+                    .sibling = sibling,
+                    .stack_mode = x11.Above,
+                };
+                try cw.data.configure(self.display, x11.CWSibling | x11.CWStackMode, &changes);
             }
         }
 
@@ -448,6 +476,8 @@ pub fn WindowManager(comptime config: Config) type {
                     try node.data.unfocus(self.display);
                 }
             }
+
+            try self.arrange();
         }
 
         fn setAction(ptr: *anyopaque, mode: Action) Error!void {

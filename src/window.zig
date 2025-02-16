@@ -14,6 +14,7 @@ pub const Error = error{
     FocusFailed,
     AttributesFailed,
     DestroyFailed,
+    ConfigueFailed,
 };
 
 const Alignment = layout.Alignment;
@@ -72,6 +73,10 @@ pub fn Window(comptime T: type) type {
                 mask,
             );
             if (result == x11.False) return Error.SelectInputFailed;
+        }
+
+        pub fn configure(self: *const Self, display: *Display, flags: c_uint, changes: *x11.XWindowChanges) Error!void {
+            if (x11.XConfigureWindow(display, self.handle, flags, changes) == x11.False) return Error.ConfigueFailed;
         }
 
         pub fn map(self: *const Self, display: *Display) Error!void {
