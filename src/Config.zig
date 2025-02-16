@@ -26,13 +26,15 @@ const ModLayer1 = x11.ShiftMask;
 const ModLayer2 = x11.ControlMask;
 const ModLayer3 = x11.ControlMask | x11.ShiftMask;
 
+// How many events are being processed per second
+// Recommend 60 to not overload x11
+event_fps: f32,
+
 // Workspaces
 workspaces: type,
 
 // Default Layout
 layout: *const Layout,
-
-master: usize,
 
 // X11 Event Handlers
 handlers: []const handler.HandlerEntry,
@@ -40,16 +42,19 @@ handlers: []const handler.HandlerEntry,
 // User defined keyboard shortcuts
 keys: []const shortcut.Shortcut,
 
+// User defined mouse button shortcuts
 buttons: []const shortcut.Shortcut,
 
 pub const Default = Config{
+    // Use monitor refresh rate for event interval
+    .event_fps = 60 / 144,
+
     // Using a 9-bit workspace
     .workspaces = u9,
 
     // Default layout when opening a new workspace
-    .layout = &layouts.tile,
+    .layout = &layouts.bugo,
 
-    .master = 0,
     // TODO: Theme
 
     // TODO: Bar (configurable workspaces + custom)
@@ -86,6 +91,7 @@ pub const Default = Config{
         // // Workspace configuration
         SC(ModLayer0, x11.XK_m, action.setLayout, .{&layouts.monocle}),
         SC(ModLayer0, x11.XK_t, action.setLayout, .{&layouts.tile}),
+        SC(ModLayer0, x11.XK_b, action.setLayout, .{&layouts.bugo}),
         SC(ModLayer1, x11.XK_i, action.incrementMaster, .{1}),
         SC(ModLayer1, x11.XK_o, action.incrementMaster, .{-1}),
 
@@ -99,6 +105,8 @@ pub const Default = Config{
         SC(ModLayer0, x11.XK_q, action.kill, .{}),
     },
     .buttons = &[_]shortcut.Shortcut{
+        // Window placement & size
         SC(ModLayer0, x11.Button1, action.move, .{}),
+        SC(ModLayer0, x11.Button3, action.resize, .{}),
     },
 };

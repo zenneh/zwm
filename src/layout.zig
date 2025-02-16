@@ -13,6 +13,17 @@ pub const Alignment = struct {
     pos: Pos = Pos{},
     width: u32 = 0,
     height: u32 = 0,
+
+    pub fn diff(a: Alignment, b: Alignment) Alignment {
+        return Alignment{
+            .pos = Pos{
+                .x = a.pos.x - b.pos.x,
+                .y = a.pos.y - b.pos.y,
+            },
+            .width = a.width - b.width,
+            .height = a.height - b.height,
+        };
+    }
 };
 
 // TODO, for window sizing
@@ -24,7 +35,7 @@ pub const Context = struct {
     root: *const Alignment,
 };
 
-pub const ArrangeFn = *const fn (ctx: *const Context, alignments: []*Alignment) void;
+pub const ArrangeFn = *const fn (ctx: *const Context, alignments: []*Alignment, preferences: []?*Alignment) void;
 
 pub const Layout = struct {
     arrange: ArrangeFn,
@@ -38,20 +49,50 @@ pub const layouts = struct {
     pub const tile = Layout{
         .arrange = Tile.arrange,
     };
+
+    pub const bugo = Layout{
+        .arrange = BugoJanssen.arrange,
+    };
 };
 
 const Monocle = struct {
-    pub fn arrange(ctx: *const Context, alignments: []*Alignment) void {
+    pub fn arrange(ctx: *const Context, alignments: []*Alignment, _: []?*Alignment) void {
         for (alignments) |al| {
             al.* = ctx.root.*;
         }
     }
 };
 
+const BugoJanssen = struct {
+    pub fn arrange(ctx: *const Context, alignments: []*Alignment, preferences: []?*Alignment) void {
+        // Early returns for empty or single window cases
+        if (alignments.len == 0) return;
+        if (alignments.len == 1) {
+            alignments[0].* = ctx.root.*;
+            return;
+        }
+
+        // Find master preference
+        var master_preference: ?*Alignment = null;
+        for (0..alignments.len) |i| {
+            if (preferences[i]) |p| {
+                if (std.meta.eql(Alignment.diff(alignments[i].*, p.*), Alignment{})) {
+                    master_preference = preferences[i];
+                    std.log.debug("Found master preferences", .{});
+                    break;
+                }
+            }
+        }
+
+        // Calculate predefined widths and heights
+
+    }
+};
+
 const Tile = struct {
     /// Arranges windows in a tiling layout with a master area and stack area
     /// master_count determines how many windows appear in the master area
-    pub fn arrange(ctx: *const Context, alignments: []*Alignment) void {
+    pub fn arrange(ctx: *const Context, alignments: []*Alignment, _: []?*Alignment) void {
         // Early returns for empty or single window cases
         if (alignments.len == 0) return;
         if (alignments.len == 1) {
@@ -106,66 +147,3 @@ const Tile = struct {
 };
 
 const Grid = struct {};
-
-// const Tile = struct {
-//     fn arrange(ctx: *const Context, windows: []*Window, alignment: *const Alignment, display: *x.Display) void {
-//         if (windows.len == 0) return;
-
-//         // Master window takes up left portion
-//         if (windows.len == 1) {
-//             windows[0].*.alignment = alignment.*;
-//             windows[0].arrange(display) catch unreachable;
-//             return;
-//         }
-
-//         const master_amount = ctx.index % windows.len;
-//         const child_amount = windows.len - master_amount;
-
-//         if (child_amount == 0 or master_amount == 0) {
-//             const height = alignment.height / windows.len;
-//             for (windows, 0..) |window, index| {
-//                 window.alignment = .{
-//                     .pos = .{
-//                         .x = alignment.pos.x,
-//                         .y = alignment.pos.y + @as(c_int, @intCast(height * index)),
-//                     },
-//                     .width = alignment.width,
-//                     .height = @intCast(height),
-//                 };
-//                 window.arrange(display) catch unreachable;
-//             }
-//             return;
-//         }
-
-//         const master_height: usize = alignment.height / master_amount;
-//         const child_height: usize = alignment.height / child_amount;
-
-//         const width: usize = alignment.width / 2;
-
-//         // Master window
-//         for (windows[0..master_amount], 0..) |window, index| {
-//             window.alignment = .{
-//                 .pos = .{
-//                     .x = alignment.pos.x,
-//                     .y = alignment.pos.y + @as(c_int, @intCast(master_height * index)),
-//                 },
-//                 .width = @intCast(width),
-//                 .height = @intCast(master_height),
-//             };
-//             window.arrange(display) catch unreachable;
-//         }
-
-//         // Child window
-//         for (windows[master_amount..], 0..) |window, index| {
-//             window.alignment = .{
-//                 .pos = .{
-//                     .x = alignment.pos.x + @as(c_int, @intCast(width)),
-//                     .y = alignment.pos.y + @as(c_int, @intCast(child_height * index)),
-//                 },
-//                 .width = @intCast(width),
-//                 .height = @intCast(child_height),
-//             };
-//             window.arrange(display) catch unreachable;
-//         }
-//     }
-// };

@@ -65,6 +65,10 @@ pub fn kill(ctx: *Context) Error!void {
 pub fn move(ctx: *Context) Error!void {
     try ctx.setAction(.move);
 }
+
+pub fn resize(ctx: *Context) Error!void {
+    try ctx.setAction(.resize);
+}
 // fn rearrangeWorkspace(wm: *WindowManager) void {
 //     const workspace = &wm.workspaces[wm.current_workspace];
 //     workspace.arrangeWindows(&wm.root.alignment, wm.display) catch return;

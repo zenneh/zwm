@@ -49,7 +49,7 @@ const Input = union(enum) {
     pointer: layout.Pos,
 };
 
-const Action = enum {
+const Action = union(enum) {
     arrange,
     move,
     resize,
@@ -69,7 +69,7 @@ pub const Context = struct {
         toggleMode: *const fn (ptr: *anyopaque, mode: window.Mode) Error!void,
 
         moveWindow: *const fn (ptr: *anyopaque, pos: layout.Pos) Error!void,
-        resizeWindow: *const fn (ptr: *anyopaque, width: u32, height: u32) Error!void,
+        resizeWindow: *const fn (ptr: *anyopaque, pos: layout.Pos) Error!void,
 
         setInput: *const fn (ptr: *anyopaque, mode: Input) Error!void,
         setAction: *const fn (ptr: *anyopaque, mode: Action) Error!void,
@@ -98,8 +98,8 @@ pub const Context = struct {
     pub fn moveWindow(self: Context, pos: layout.Pos) Error!void {
         try self.vtable.moveWindow(self.ptr, pos);
     }
-    pub fn resizeWindow(self: Context, width: u32, height: u32) Error!void {
-        try self.vtable.resizeWindow(self.ptr, width, height);
+    pub fn resizeWindow(self: Context, pos: layout.Pos) Error!void {
+        try self.vtable.resizeWindow(self.ptr, pos);
     }
 
     pub fn setInput(self: Context, mode: Input) Error!void {
@@ -218,6 +218,9 @@ pub fn WindowManager(comptime config: Config) type {
 
         const button_handler = util.createButtonShortcutHandler(config.buttons);
 
+        // How many events are being processed per second
+        const event_fps: f64 = config.event_fps;
+
         // Layouts
         var layouts = util.createLayouts(Mask, config.layout);
 
@@ -289,7 +292,7 @@ pub fn WindowManager(comptime config: Config) type {
 
             // Select input
             try self.root.selectInput(self.display, ROOT_MASK);
-            _ = x11.XSync(self.display, x11.False);
+            self.sync();
 
             self.grabKeys();
 
@@ -298,6 +301,10 @@ pub fn WindowManager(comptime config: Config) type {
 
         fn recover(_: *Self) void {
             //TODO: Recover from error and restart
+        }
+
+        fn sync(self: *Self) void {
+            _ = x11.XSync(self.display, x11.False);
         }
 
         fn handleError(self: *Self, _: ?*x11.Display, event: [*c]x11.XErrorEvent) void {
@@ -354,58 +361,63 @@ pub fn WindowManager(comptime config: Config) type {
             };
         }
 
-        fn arrange(self: *Self) Error!void {
-            const alignments = try self.allocator.alloc(*layout.Alignment, self.windows.len);
-            defer self.allocator.free(alignments);
+        fn getActiveAlignmentsOwnedSlice(self: *Self, mode: window.Mode, alignments: *[]*layout.Alignment, preferences: *[]?*layout.Alignment, windows: *[]*Window) Error!void {
+            var count: usize = 0;
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                if (node.data.mode == mode and node.data.mask.has(self.current_workspace)) count += 1;
+            }
 
-            const windows = try self.allocator.alloc(*Window, self.windows.len);
-            defer self.allocator.free(windows);
+            alignments.* = try self.allocator.alloc(*layout.Alignment, count);
+            defer self.allocator.free(alignments.*);
+
+            preferences.* = try self.allocator.alloc(?*layout.Alignment, count);
+            defer self.allocator.free(preferences.*);
+
+            windows.* = try self.allocator.alloc(*Window, count);
+            defer self.allocator.free(windows.*);
+
+            var index: usize = 0;
+            it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                if (node.data.mode != mode and !node.data.mask.has(self.current_workspace)) continue;
+                alignments.*[index] = &node.data.alignment;
+                if (node.data.preferences) |*al| {
+                    preferences.*[index] = al;
+                } else {
+                    preferences.*[index] = null;
+                }
+                windows.*[index] = &node.data;
+                index += 1;
+            }
+        }
+
+        fn arrange(self: *Self) Error!void {
+            var default_alignments: []*layout.Alignment = undefined;
+            var default_preferences: []?*layout.Alignment = undefined;
+            var default_windows: []*Window = undefined;
+
+            try self.getActiveAlignmentsOwnedSlice(.default, &default_alignments, &default_preferences, &default_windows);
+            defer self.allocator.free(default_alignments);
+            defer self.allocator.free(default_preferences);
+            defer self.allocator.free(default_windows);
 
             std.log.debug("root alignment {any}", .{self.root.alignment});
 
-            var it = self.windows.first;
-            var index: usize = 0;
-            while (it) |node| : (it = node.next) {
-                const is_active = node.data.mask.has(self.current_workspace);
-                // Set visability depending on workspace
-                if (is_active) {
-                    try node.data.map(self.display);
-                } else {
-                    try node.data.unmap(self.display);
-                }
-
-                if (node.data.mode == .floating and is_active) {
-                    try node.data.raise(self.display);
-                }
-
-                // Only pass default windows to layout
-                if (node.data.mode == .default and is_active) {
-                    alignments[index] = &node.data.alignment;
-                    windows[index] = &node.data;
-
-                    std.log.debug("alignment before {any}", .{node.data.alignment});
-                    index += 1;
-                }
-            }
-
-            try self.restack(windows[0..index]);
+            try self.restack(default_windows);
 
             Self.layouts[self.current_workspace].arrange(&.{
                 .index = Self.master_counts[self.current_workspace],
                 .root = &self.root.alignment,
-            }, alignments[0..index]);
+            }, default_alignments, default_preferences);
 
-            for (alignments[0..index]) |al| {
-                std.log.debug("alignment before {any}", .{al});
-            }
-
-            for (windows[0..index], 0..) |w, i| {
+            for (default_windows, 0..) |w, i| {
                 try w.moveResize(
                     self.display,
-                    alignments[i].pos.x,
-                    alignments[i].pos.y,
-                    alignments[i].width,
-                    alignments[i].height,
+                    default_alignments[i].pos.x,
+                    default_alignments[i].pos.y,
+                    default_alignments[i].width,
+                    default_alignments[i].height,
                 );
             }
         }
@@ -501,6 +513,9 @@ pub fn WindowManager(comptime config: Config) type {
             switch (mode) {
                 .default => {
                     _ = x11.XUngrabPointer(self.display, x11.CurrentTime);
+                    if (self.current_window) |node| {
+                        try node.data.updateAlignment(self.display);
+                    }
                 },
                 .pointer => {
                     _ = x11.XGrabPointer(self.display, self.root.handle, x11.False, POINTER_MASK, x11.GrabModeAsync, x11.GrabModeAsync, x11.None, x11.None, x11.CurrentTime);
@@ -512,27 +527,47 @@ pub fn WindowManager(comptime config: Config) type {
 
         fn moveAlignWindow(_: *Self, _: layout.Pos) Error!void {}
 
+        fn resizeWindow(ptr: *anyopaque, pos: layout.Pos) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+
+            var offset_x: c_int = 0;
+            var offset_y: c_int = 0;
+            switch (self.input) {
+                .pointer => |p| {
+                    offset_x = @intCast(pos.x - p.x);
+                    offset_y = @intCast(pos.y - p.y);
+                },
+                .default => return,
+            }
+
+            if (self.current_window) |w| {
+                const new_width: i32 = @as(i32, @intCast(w.data.alignment.width)) + @as(i32, @intCast(offset_x));
+                const new_height: i32 = @as(i32, @intCast(w.data.alignment.height)) + @as(i32, @intCast(offset_y));
+
+                const a: u32 = if (new_width > 100) @intCast(new_width) else w.data.alignment.width;
+                const b: u32 = if (new_height > 100) @intCast(new_height) else w.data.alignment.height;
+
+                try w.data.resize(self.display, a, b);
+                try w.data.focus(self.display);
+            }
+        }
+
         fn moveWindow(ptr: *anyopaque, pos: layout.Pos) Error!void {
             const self: *Self = @ptrCast(@alignCast(ptr));
 
             switch (self.input) {
                 .pointer => |p| {
-                    std.log.debug("initial {}", .{p});
                     const new_x = pos.x - p.x;
                     const new_y = pos.y - p.y;
                     if (self.current_window) |w| {
+                        w.data.setPreferences(.{
+                            .pos = layout.Pos{ .x = new_x, .y = new_y },
+                        });
                         try w.data.focus(self.display);
                         try w.data.move(self.display, new_x, new_y);
                     }
                 },
                 .default => return,
-            }
-        }
-
-        fn resizeWindow(ptr: *anyopaque, width: u32, height: u32) Error!void {
-            const self: *Self = @ptrCast(@alignCast(ptr));
-            if (self.current_window) |w| {
-                try w.data.resize(self.display, width, height);
             }
         }
 

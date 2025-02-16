@@ -70,7 +70,8 @@ pub fn motionNotify(ctx: *const Context, event: *const x11.XEvent) Error!void {
     switch (ctx.action) {
         .arrange => {},
         .resize => {
-            @panic("Resize not implemented");
+            std.log.info("resizing window: {}:{}", .{ casted.x, casted.y });
+            try ctx.resizeWindow(.{ .x = casted.x, .y = casted.y });
         },
         .move => {
             std.log.info("moving window: {}:{}", .{ casted.x, casted.y });

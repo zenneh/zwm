@@ -45,6 +45,9 @@ pub fn Window(comptime T: type) type {
         // Alignment of the window
         alignment: Alignment,
 
+        // If a preference is specified
+        preferences: ?Alignment,
+
         // Bitmask representing workspaces
         mask: Mask(T),
 
@@ -54,6 +57,7 @@ pub fn Window(comptime T: type) type {
                 .handle = window,
                 .mode = .default,
                 .alignment = .{},
+                .preferences = null,
                 .mask = Mask(T).init(0),
             };
         }
@@ -142,6 +146,14 @@ pub fn Window(comptime T: type) type {
 
         pub fn setAlignment(self: *Self, alignment: Alignment) void {
             self.alignment = alignment;
+        }
+
+        pub fn setPreferences(self: *Self, alignment: Alignment) void {
+            self.preferences = alignment;
+        }
+
+        pub fn clearPreferences(self: *Self) void {
+            self.preferences = null;
         }
     };
 }
