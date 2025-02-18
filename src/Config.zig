@@ -53,7 +53,7 @@ pub const Default = Config{
     .workspaces = u9,
 
     // Default layout when opening a new workspace
-    .layout = &layouts.bugo,
+    .layout = &layouts.tile,
 
     // TODO: Theme
 

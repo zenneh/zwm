@@ -13,19 +13,16 @@ const Error = window_manager.Error;
 
 // View A workspace
 pub fn view(ctx: *Context, index: usize) Error!void {
-    std.log.info("view workspace {}", .{index});
     try ctx.viewWorkspace(index);
 }
 
 // Tag a window to a workspace
 pub fn tag(ctx: *Context, index: usize) Error!void {
-    std.log.info("Tag window to {d}", .{index});
     try ctx.tagWindow(index);
 }
 
 // Toggle the tag of a window to a workspace
 pub fn toggleTag(ctx: *Context, index: usize) Error!void {
-    std.log.info("Toggle window tag {d}", .{index});
     try ctx.toggleTagWindow(index);
 }
 
@@ -46,7 +43,6 @@ pub fn focusPrev(ctx: *Context) Error!void {
 }
 
 pub fn setLayout(ctx: *Context, l: *const layout.Layout) Error!void {
-    std.log.info("Setting layout to {s}", .{@typeName(@TypeOf(l.*))});
     try ctx.setLayout(l);
 }
 

@@ -9,6 +9,9 @@
 - [ ] Fix arrange and restack bugs
 - [ ] Reimplement tile layout
 
+# Bugs
+- [ ] Windows don't get unmapped when changing workspaces
+
 # Nextup
 - [ ] x11 atoms
 - [ ] Cursors

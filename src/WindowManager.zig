@@ -87,6 +87,8 @@ pub const Context = struct {
 
     display: *Display,
 
+    root: c_ulong,
+
     input: Input,
 
     action: Action,
@@ -335,6 +337,7 @@ pub fn WindowManager(comptime config: Config) type {
                 .action = self.action,
                 .input = self.input,
                 .display = self.display,
+                .root = self.root.handle,
                 .ptr = self,
                 .vtable = .{
                     .setInput = setInput,
@@ -369,18 +372,18 @@ pub fn WindowManager(comptime config: Config) type {
             }
 
             alignments.* = try self.allocator.alloc(*layout.Alignment, count);
-            defer self.allocator.free(alignments.*);
+            errdefer self.allocator.free(alignments.*);
 
             preferences.* = try self.allocator.alloc(?*layout.Alignment, count);
-            defer self.allocator.free(preferences.*);
+            errdefer self.allocator.free(preferences.*);
 
             windows.* = try self.allocator.alloc(*Window, count);
-            defer self.allocator.free(windows.*);
+            errdefer self.allocator.free(windows.*);
 
             var index: usize = 0;
             it = self.windows.first;
             while (it) |node| : (it = node.next) {
-                if (node.data.mode != mode and !node.data.mask.has(self.current_workspace)) continue;
+                if (node.data.mode != mode or !node.data.mask.has(self.current_workspace)) continue;
                 alignments.*[index] = &node.data.alignment;
                 if (node.data.preferences) |*al| {
                     preferences.*[index] = al;
@@ -616,6 +619,17 @@ pub fn WindowManager(comptime config: Config) type {
         fn viewWorkspace(ptr: *anyopaque, index: usize) Error!void {
             const self: *Self = @ptrCast(@alignCast(ptr));
             self.current_workspace = @truncate(index);
+
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                if (node.data.mask.has(self.current_workspace)) {
+                    try node.data.map(self.display);
+                    try node.data.selectInput(self.display, WINDOW_MASK);
+                } else {
+                    try node.data.unmap(self.display);
+                    try node.data.selectInput(self.display, 0);
+                }
+            }
             try self.arrange();
         }
 

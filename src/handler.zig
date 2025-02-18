@@ -60,6 +60,8 @@ pub fn keyPress(ctx: *const Context, event: *const x11.XEvent) Error!void {
 pub fn enterNotify(ctx: *const Context, event: *const x11.XEvent) Error!void {
     const casted = @as(*const x11.XEnterWindowEvent, @ptrCast(event));
     std.log.info("Enter notify {}", .{casted.window});
+    if ((casted.mode != x11.NotifyNormal or casted.detail == x11.NotifyInferior) and
+        casted.window != ctx.root) return;
     try ctx.focusWindow(casted.window);
 }
 
