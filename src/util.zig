@@ -11,6 +11,10 @@ const Context = window_manager.Context;
 const Error = window_manager.Error;
 const Alloc = std.mem.Allocator;
 
+pub fn createWorkspaces(comptime mask: type, comptime window: type) type {
+    return @TypeOf([@bitSizeOf(mask)]std.DoublyLinkedList(*window));
+}
+
 pub fn createLayoutsType(comptime T: type) type {
     return @TypeOf([@bitSizeOf(T)]*const layout.Layout);
 }

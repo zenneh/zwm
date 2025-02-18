@@ -4,8 +4,8 @@ const window = @import("window.zig");
 const layout = @import("layout.zig");
 const plugin = @import("plugin.zig");
 const util = @import("util.zig");
-const Workspace = @import("Workspace.zig");
 const bitmask = @import("bitmask.zig");
+const workspace = @import("workspace.zig");
 
 const handler = @import("handler.zig");
 
@@ -177,6 +177,9 @@ pub fn WindowManager(comptime config: Config) type {
     const Window = window.Window(Mask);
     const WindowList = std.DoublyLinkedList(Window);
     const CurrentWorkspace = util.createCurrentWorkspaceType(Mask);
+    const Workspace = workspace.Workspace(Window);
+
+    const BITSIZE = @bitSizeOf(config.workspaces);
 
     return struct {
         allocator: std.mem.Allocator,
@@ -201,6 +204,8 @@ pub fn WindowManager(comptime config: Config) type {
 
         // A bitmask representing all the active workspaces
         workspace_mask: WorkspaceMask,
+
+        workspace: [BITSIZE]Workspace,
 
         // Error handler
         // error_handler: comptime
@@ -260,6 +265,7 @@ pub fn WindowManager(comptime config: Config) type {
                 .state = .initial,
                 .input = .default,
                 .action = .arrange,
+                .workspace = .{Workspace.init(allocator, config.layout)} ** BITSIZE,
             };
         }
 
@@ -635,10 +641,14 @@ pub fn WindowManager(comptime config: Config) type {
 
         fn tagWindow(ptr: *anyopaque, index: usize) Error!void {
             const self: *Self = @ptrCast(@alignCast(ptr));
-            if (self.current_window) |node| {
-                node.data.mask.clear();
-                node.data.mask.tag(@intCast(index));
-            }
+            if (index == self.current_workspace) return;
+
+            const current_node = self.current_window orelse return;
+
+            current_node.data.mask.clear();
+            current_node.data.mask.tag(@intCast(index));
+            try current_node.data.unmap(self.display);
+
             try self.arrange();
         }
 
@@ -740,6 +750,7 @@ pub fn WindowManager(comptime config: Config) type {
         fn kill(ptr: *anyopaque) Error!void {
             const self: *Self = @ptrCast(@alignCast(ptr));
 
+            // TODO: This will cause issues for focussing on a window within the same workspace
             if (self.current_window) |node| {
                 try node.data.destroy(self.display);
                 self.windows.remove(node);
