@@ -2,23 +2,26 @@ const std = @import("std");
 const _layout = @import("layout.zig");
 const x11 = @import("X11.zig");
 
+const Alignment = _layout.Alignment;
 const Layout = _layout.Layout;
 const Allocator = std.mem.Allocator;
 
-const Error = error{
+pub const Error = error{
     WindowAlreadyInWorkspace,
     WindowNotInWorkspace,
-} ++ std.mem.Allocator.Error;
+} || std.mem.Allocator.Error;
 
 pub fn WindowData(comptime Window: type) type {
     return struct {
         ptr: *const Window,
-        //
+        preferred: Alignment, // Preferred alignment
     };
 }
 
+// A workspace owns a window node for the time being active in here
+// Ownership can be transfered to other workspaces
 pub fn Workspace(comptime Window: type) type {
-    const Windows = std.DoublyLinkedList(*const Window);
+    const Windows = std.DoublyLinkedList(WindowData(Window));
 
     return struct {
         layout: *const Layout,
@@ -41,14 +44,6 @@ pub fn Workspace(comptime Window: type) type {
                 .allocator = allocator,
                 .current_window = null,
             };
-        }
-
-        pub fn getCurrentWindow(self: *Self) ?*const Window {
-            if (self.current_window) |node| {
-                return node.data;
-            }
-
-            return null;
         }
 
         pub fn nextWindow(self: *Self) ?*const Window {
@@ -76,10 +71,10 @@ pub fn Workspace(comptime Window: type) type {
             self.master = @intCast(new_master);
         }
 
-        fn getWindowNodeByReference(self: *Self, window: *const Window) ?Windows.Node {
+        fn getWindowNodeByReference(self: *Self, window: *const Window) ?*Windows.Node {
             var it = self.windows.first;
             while (it) |node| : (it = node.next) {
-                if (node.data == window) return node;
+                if (node.data.ptr == window) return node;
             }
             return null;
         }
@@ -89,7 +84,12 @@ pub fn Workspace(comptime Window: type) type {
 
             const node = try self.allocator.create(Windows.Node);
             errdefer self.allocator.destroy(node);
-            node.*.data = window;
+
+            node.*.data = WindowData(Window){
+                .ptr = window,
+                .preferred = Alignment{},
+            };
+
             self.windows.prepend(node);
         }
 
@@ -100,18 +100,18 @@ pub fn Workspace(comptime Window: type) type {
             self.allocator.destroy(node);
         }
 
-        pub fn mapAllWindows(self: *Self, display: *x11.Display) void {
-            var it = self.windows.first;
-            while (it) |node| : (it = node.next) {
-                node.data.map(display);
-            }
-        }
+        // pub fn mapAllWindows(self: *Self, display: *x11.Display) void {
+        //     var it = self.windows.first;
+        //     while (it) |node| : (it = node.next) {
+        //         node.data.map(display);
+        //     }
+        // }
 
-        pub fn unmapAllWindows(self: *Self, display: *x11.Display) void {
-            var it = self.windows.first;
-            while (it) |node| : (it = node.next) {
-                node.data.unmap(display);
-            }
-        }
+        // pub fn unmapAllWindows(self: *Self, display: *x11.Display) void {
+        //     var it = self.windows.first;
+        //     while (it) |node| : (it = node.next) {
+        //         node.data.unmap(display);
+        //     }
+        // }
     };
 }
