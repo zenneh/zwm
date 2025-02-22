@@ -17,7 +17,7 @@ pub fn main() !void {
     var wm = try WM.init(gpa.allocator());
     defer wm.deinit();
 
-    wm.start() catch {
-        std.log.err("Hey we got some issues man\n", .{});
+    wm.start() catch |err| {
+        std.log.err("Hey we got some issues man: {s}\n", .{@errorName(err)});
     };
 }

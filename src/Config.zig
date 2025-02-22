@@ -53,7 +53,7 @@ pub const Default = Config{
     .workspaces = u9,
 
     // Default layout when opening a new workspace
-    .layout = &layouts.tile,
+    .layout = &layouts.monocle,
 
     // TODO: Theme
 
@@ -68,20 +68,20 @@ pub const Default = Config{
 
     .keys = &[_]shortcut.Shortcut{
         // Tag window
-        // SC(ModLayer1, x11.XK_1, action.tag, .{0}),
-        // SC(ModLayer1, x11.XK_2, action.tag, .{1}),
-        // SC(ModLayer1, x11.XK_3, action.tag, .{2}),
-        // SC(ModLayer1, x11.XK_4, action.tag, .{3}),
-        // SC(ModLayer3, x11.XK_1, action.toggleTag, .{0}),
-        // SC(ModLayer3, x11.XK_2, action.toggleTag, .{1}),
-        // SC(ModLayer3, x11.XK_3, action.toggleTag, .{2}),
-        // SC(ModLayer3, x11.XK_4, action.toggleTag, .{3}),
+        SC(ModLayer1, x11.XK_1, action.tag, .{0}),
+        SC(ModLayer1, x11.XK_2, action.tag, .{1}),
+        SC(ModLayer1, x11.XK_3, action.tag, .{2}),
+        SC(ModLayer1, x11.XK_4, action.tag, .{3}),
+        SC(ModLayer3, x11.XK_1, action.toggleTag, .{0}),
+        SC(ModLayer3, x11.XK_2, action.toggleTag, .{1}),
+        SC(ModLayer3, x11.XK_3, action.toggleTag, .{2}),
+        SC(ModLayer3, x11.XK_4, action.toggleTag, .{3}),
 
         // // View workspace
-        // SC(ModLayer0, x11.XK_1, action.view, .{0}),
-        // SC(ModLayer0, x11.XK_2, action.view, .{1}),
-        // SC(ModLayer0, x11.XK_3, action.view, .{2}),
-        // SC(ModLayer0, x11.XK_4, action.view, .{3}),
+        SC(ModLayer0, x11.XK_1, action.view, .{0}),
+        SC(ModLayer0, x11.XK_2, action.view, .{1}),
+        SC(ModLayer0, x11.XK_3, action.view, .{2}),
+        SC(ModLayer0, x11.XK_4, action.view, .{3}),
         SC(ModLayer0, x11.XK_c, action.check, .{}),
 
         // // Navigation
@@ -89,18 +89,18 @@ pub const Default = Config{
         // SC(ModLayer0, x11.XK_p, action.focusPrev, .{}),
 
         // // Workspace configuration
-        // SC(ModLayer0, x11.XK_m, action.setLayout, .{&layouts.monocle}),
-        // SC(ModLayer0, x11.XK_t, action.setLayout, .{&layouts.tile}),
-        // SC(ModLayer0, x11.XK_b, action.setLayout, .{&layouts.bugo}),
-        // SC(ModLayer1, x11.XK_i, action.incrementMaster, .{1}),
-        // SC(ModLayer1, x11.XK_o, action.incrementMaster, .{-1}),
+        SC(ModLayer0, x11.XK_m, action.setLayout, .{&layouts.monocle}),
+        SC(ModLayer0, x11.XK_t, action.setLayout, .{&layouts.tile}),
+        SC(ModLayer0, x11.XK_b, action.setLayout, .{&layouts.bugo}),
+        SC(ModLayer1, x11.XK_i, action.incrementMaster, .{1}),
+        SC(ModLayer1, x11.XK_o, action.incrementMaster, .{-1}),
 
         // // Window configuration
         // SC(ModLayer1, x11.XK_p, action.toggleMode, .{Mode.floating}),
 
         // // Processes
-        // SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
-        // SC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
+        SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
+        SC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
 
         // SC(ModLayer0, x11.XK_q, action.kill, .{}),
     },

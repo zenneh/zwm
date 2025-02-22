@@ -17,7 +17,7 @@ pub fn Mask(comptime T: type) type {
             };
         }
 
-        pub fn has(self: *@This(), position: T) bool {
+        pub fn has(self: *const @This(), position: T) bool {
             return (self.mask & (@as(T, 1) << @truncate(position))) != 0;
         }
 
@@ -33,13 +33,13 @@ pub fn Mask(comptime T: type) type {
             self.mask &= !(@as(T, 1) << @truncate(position));
         }
 
-        pub fn next(self: *@This(), position: T) T {
+        pub fn next(self: *const @This(), position: T) T {
             if (self.mask == 0) return position;
             const shifted: T = self.mask >> @truncate(position + 1);
             return if (shifted == 0) @ctz(self.mask) else position + 1 + @ctz(shifted);
         }
 
-        pub fn prev(self: *@This(), position: T) T {
+        pub fn prev(self: *const @This(), position: T) T {
             if (self.mask == 0) return position;
             const amount = bits - position;
             const shifted: T = self.mask << @truncate(amount);

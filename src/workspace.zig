@@ -1,6 +1,7 @@
 const std = @import("std");
 const _layout = @import("layout.zig");
 const x11 = @import("X11.zig");
+const _window = @import("window.zig");
 
 const Alignment = _layout.Alignment;
 const Layout = _layout.Layout;
@@ -9,18 +10,19 @@ const Allocator = std.mem.Allocator;
 pub const Error = error{
     WindowAlreadyInWorkspace,
     WindowNotInWorkspace,
-} || std.mem.Allocator.Error;
+} || std.mem.Allocator.Error || _window.Error;
 
-pub fn WindowData(comptime Window: type) type {
+pub fn WindowData(comptime T: type) type {
     return struct {
-        ptr: *const Window,
+        ptr: *T,
         preferred: Alignment, // Preferred alignment
     };
 }
 
 // A workspace owns a window node for the time being active in here
 // Ownership can be transfered to other workspaces
-pub fn Workspace(comptime Window: type) type {
+pub fn Workspace(comptime Mask: type) type {
+    const Window = _window.Window(Mask);
     const Windows = std.DoublyLinkedList(WindowData(Window));
 
     return struct {
@@ -79,7 +81,7 @@ pub fn Workspace(comptime Window: type) type {
             return null;
         }
 
-        pub fn addWindow(self: *Self, window: *const Window) Error!void {
+        pub fn addWindow(self: *Self, window: *Window) Error!void {
             if (self.getWindowNodeByReference(window) != null) return Error.WindowAlreadyInWorkspace;
 
             const node = try self.allocator.create(Windows.Node);
@@ -91,6 +93,85 @@ pub fn Workspace(comptime Window: type) type {
             };
 
             self.windows.prepend(node);
+
+            self.current_window = node;
+        }
+
+        pub fn arrange(self: *Self, alignment: Alignment, display: *x11.Display) Error!void {
+            // Count windows
+            var count: usize = 0;
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                if (node.data.ptr.mode == .default) count += 1;
+            }
+
+            // allocate slices
+            const windows = try self.allocator.alloc(*Window, count);
+            defer self.allocator.free(windows);
+
+            const alignments = try self.allocator.alloc(*Alignment, count);
+            defer self.allocator.free(alignments);
+
+            const preferences = try self.allocator.alloc(?*Alignment, count);
+            defer self.allocator.free(preferences);
+
+            // get data
+            it = self.windows.first;
+            var index: usize = 0;
+            while (it) |node| : ({
+                it = node.next;
+                index += 1;
+            }) {
+                if (node.data.ptr.mode == .default) {
+                    windows[index] = node.data.ptr;
+                    alignments[index] = &node.data.ptr.alignment;
+                    if (node.data.ptr.preferences) |*p| {
+                        preferences[index] = p;
+                    } else {
+                        preferences[index] = null;
+                    }
+                }
+            }
+
+            self.layout.arrange(&.{
+                .root = &alignment,
+                .index = self.master,
+            }, alignments, preferences);
+
+            for (windows, 0..) |window, i| {
+                try window.moveResize(
+                    display,
+                    alignments[i].pos.x,
+                    alignments[i].pos.y,
+                    alignments[i].width,
+                    alignments[i].height,
+                );
+            }
+        }
+
+        pub fn restack(self: *Self, windows: []*Window) Error!void {
+            var sibling: x11.Window = self.root.handle;
+
+            for (windows) |w| {
+                if (self.current_window) |cw| {
+                    if (&cw.data != w) {
+                        var changes = x11.XWindowChanges{
+                            .sibling = sibling,
+                            .stack_mode = x11.Above,
+                        };
+                        try w.configure(self.display, x11.CWSibling | x11.CWStackMode, &changes);
+                        sibling = w.handle;
+                    }
+                }
+            }
+
+            if (self.current_window) |cw| {
+                var changes = x11.XWindowChanges{
+                    .sibling = sibling,
+                    .stack_mode = x11.Above,
+                };
+                try cw.data.configure(self.display, x11.CWSibling | x11.CWStackMode, &changes);
+            }
         }
 
         pub fn removeWindow(self: *Self, window: *const Window) Error!void {

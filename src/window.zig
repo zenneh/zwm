@@ -63,11 +63,11 @@ pub fn Window(comptime T: type) type {
         }
 
         pub fn tag(self: *Self, position: usize) !void {
-            self.mask.tag(position);
+            self.mask.tag(@truncate(position));
         }
 
         pub fn untag(self: *Self, position: usize) !void {
-            self.mask.untag(position);
+            self.mask.untag(@truncate(position));
         }
 
         pub fn selectInput(self: *const Self, display: *Display, mask: c_long) Error!void {

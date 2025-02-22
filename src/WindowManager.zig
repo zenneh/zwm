@@ -1,7 +1,7 @@
 const x11 = @import("X11.zig");
 const Config = @import("Config.zig");
-const window = @import("window.zig");
-const layout = @import("layout.zig");
+const _window = @import("window.zig");
+const _layout = @import("layout.zig");
 const plugin = @import("plugin.zig");
 const util = @import("util.zig");
 const bitmask = @import("bitmask.zig");
@@ -26,7 +26,7 @@ pub const Error = error{
     DisplayConnectionFailed,
     CursorInitFailed,
     AllocationFailed,
-} || std.mem.Allocator.Error || window.Error || std.io.AnyWriter.Error;
+} || std.mem.Allocator.Error || _window.Error || std.io.AnyWriter.Error;
 
 // X11 style error handler
 pub const ErrorHandler = fn (_: ?*x11.Display, _: [*c]x11.XErrorEvent) callconv(.C) c_int;
@@ -46,7 +46,7 @@ const State = enum {
 
 const Input = union(enum) {
     default,
-    pointer: layout.Pos,
+    pointer: _layout.Pos,
 };
 
 const Action = union(enum) {
@@ -66,10 +66,10 @@ pub const Context = struct {
         viewWorkspace: *const fn (ptr: *anyopaque, index: usize) Error!void,
         tagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
         toggleTagWindow: *const fn (ptr: *anyopaque, index: usize) Error!void,
-        toggleMode: *const fn (ptr: *anyopaque, mode: window.Mode) Error!void,
+        toggleMode: *const fn (ptr: *anyopaque, mode: _window.Mode) Error!void,
 
-        moveWindow: *const fn (ptr: *anyopaque, pos: layout.Pos) Error!void,
-        resizeWindow: *const fn (ptr: *anyopaque, pos: layout.Pos) Error!void,
+        moveWindow: *const fn (ptr: *anyopaque, pos: _layout.Pos) Error!void,
+        resizeWindow: *const fn (ptr: *anyopaque, pos: _layout.Pos) Error!void,
 
         setInput: *const fn (ptr: *anyopaque, mode: Input) Error!void,
         setAction: *const fn (ptr: *anyopaque, mode: Action) Error!void,
@@ -78,7 +78,7 @@ pub const Context = struct {
         focusWindow: *const fn (ptr: *anyopaque, x11_window: x11.Window) Error!void,
         focusNextWindow: *const fn (ptr: *anyopaque) Error!void,
         focusPrevWindow: *const fn (ptr: *anyopaque) Error!void,
-        setLayout: *const fn (ptr: *anyopaque, l: *const layout.Layout) Error!void,
+        setLayout: *const fn (ptr: *anyopaque, l: *const _layout.Layout) Error!void,
         incrementMaster: *const fn (ptr: *anyopaque, amount: i8) Error!void,
 
         process: *const fn (ptr: *anyopaque, args: []const []const u8) Error!void,
@@ -93,14 +93,14 @@ pub const Context = struct {
 
     action: Action,
 
-    pub fn toggleMode(self: Context, mode: window.Mode) Error!void {
+    pub fn toggleMode(self: Context, mode: _window.Mode) Error!void {
         try self.vtable.toggleMode(self.ptr, mode);
     }
 
-    pub fn moveWindow(self: Context, pos: layout.Pos) Error!void {
+    pub fn moveWindow(self: Context, pos: _layout.Pos) Error!void {
         try self.vtable.moveWindow(self.ptr, pos);
     }
-    pub fn resizeWindow(self: Context, pos: layout.Pos) Error!void {
+    pub fn resizeWindow(self: Context, pos: _layout.Pos) Error!void {
         try self.vtable.resizeWindow(self.ptr, pos);
     }
 
@@ -156,7 +156,7 @@ pub const Context = struct {
         try self.vtable.focusPrevWindow(self.ptr);
     }
 
-    pub fn setLayout(self: Context, l: *const layout.Layout) Error!void {
+    pub fn setLayout(self: Context, l: *const _layout.Layout) Error!void {
         try self.vtable.setLayout(self.ptr, l);
     }
 
@@ -174,10 +174,10 @@ pub const Context = struct {
 pub fn WindowManager(comptime config: Config) type {
     const Mask = util.requireUnsignedInt(config.workspaces);
     const WorkspaceMask = bitmask.Mask(Mask);
-    const Window = window.Window(Mask);
+    const Window = _window.Window(Mask);
     const WindowList = std.DoublyLinkedList(Window);
     const CurrentWorkspace = util.createCurrentWorkspaceType(Mask);
-    const Workspace = _workspace.Workspace(Window);
+    const Workspace = _workspace.Workspace(Mask);
 
     const BITSIZE = @bitSizeOf(config.workspaces);
 
@@ -368,17 +368,17 @@ pub fn WindowManager(comptime config: Config) type {
             };
         }
 
-        fn getActiveAlignmentsOwnedSlice(self: *Self, mode: window.Mode, alignments: *[]*layout.Alignment, preferences: *[]?*layout.Alignment, windows: *[]*Window) Error!void {
+        fn getActiveAlignmentsOwnedSlice(self: *Self, mode: _window.Mode, alignments: *[]*_layout.Alignment, preferences: *[]?*_layout.Alignment, windows: *[]*Window) Error!void {
             var count: usize = 0;
             var it = self.windows.first;
             while (it) |node| : (it = node.next) {
                 if (node.data.mode == mode and node.data.mask.has(self.current_workspace)) count += 1;
             }
 
-            alignments.* = try self.allocator.alloc(*layout.Alignment, count);
+            alignments.* = try self.allocator.alloc(*_layout.Alignment, count);
             errdefer self.allocator.free(alignments.*);
 
-            preferences.* = try self.allocator.alloc(?*layout.Alignment, count);
+            preferences.* = try self.allocator.alloc(?*_layout.Alignment, count);
             errdefer self.allocator.free(preferences.*);
 
             windows.* = try self.allocator.alloc(*Window, count);
@@ -399,7 +399,8 @@ pub fn WindowManager(comptime config: Config) type {
             }
         }
 
-        fn arrange(_: *Self) Error!void {
+        fn arrange(self: *Self) Error!void {
+            try self.getCurrentWorkspace().arrange(self.root.alignment, self.display);
             // var default_alignments: []*layout.Alignment = undefined;
             // var default_preferences: []?*layout.Alignment = undefined;
             // var default_windows: []*Window = undefined;
@@ -475,7 +476,7 @@ pub fn WindowManager(comptime config: Config) type {
             return null;
         }
 
-        fn toggleMode(_: *anyopaque, _: window.Mode) Error!void {
+        fn toggleMode(_: *anyopaque, _: _window.Mode) Error!void {
             // const self: *Self = @ptrCast(@alignCast(ptr));
             // if (self.current_window) |node| {
             //     const current_mode = node.data.mode;
@@ -532,9 +533,9 @@ pub fn WindowManager(comptime config: Config) type {
             self.input = mode;
         }
 
-        fn moveAlignWindow(_: *Self, _: layout.Pos) Error!void {}
+        fn moveAlignWindow(_: *Self, _: _layout.Pos) Error!void {}
 
-        fn resizeWindow(_: *anyopaque, _: layout.Pos) Error!void {
+        fn resizeWindow(_: *anyopaque, _: _layout.Pos) Error!void {
             // const self: *Self = @ptrCast(@alignCast(ptr));
 
             // var offset_x: c_int = 0;
@@ -559,7 +560,7 @@ pub fn WindowManager(comptime config: Config) type {
             // }
         }
 
-        fn moveWindow(_: *anyopaque, _: layout.Pos) Error!void {
+        fn moveWindow(_: *anyopaque, _: _layout.Pos) Error!void {
             // const self: *Self = @ptrCast(@alignCast(ptr));
 
             // switch (self.input) {
@@ -627,48 +628,72 @@ pub fn WindowManager(comptime config: Config) type {
             try self.arrange();
         }
 
-        fn viewWorkspace(_: *anyopaque, _: usize) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
-            // self.current_workspace = @truncate(index);
+        fn viewWorkspace(ptr: *anyopaque, index: usize) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            self.current_workspace = @truncate(index);
 
-            // var it = self.windows.first;
-            // while (it) |node| : (it = node.next) {
-            //     if (node.data.mask.has(self.current_workspace)) {
-            //         try node.data.map(self.display);
-            //         try node.data.selectInput(self.display, WINDOW_MASK);
-            //     } else {
-            //         try node.data.unmap(self.display);
-            //         try node.data.selectInput(self.display, 0);
-            //     }
-            // }
-            // try self.arrange();
+            var it = self.windows.first;
+            while (it) |node| : (it = node.next) {
+                if (node.data.mask.has(self.current_workspace)) {
+                    try node.data.map(self.display);
+                    try node.data.selectInput(self.display, WINDOW_MASK);
+                } else {
+                    try node.data.unmap(self.display);
+                    try node.data.selectInput(self.display, 0);
+                }
+            }
+            try self.arrange();
         }
 
-        fn tagWindow(_: *anyopaque, _: usize) Error!void {
-            //     const self: *Self = @ptrCast(@alignCast(ptr));
-            //     if (index == self.current_workspace) return;
-
-            //     const current_node = self.current_window orelse return;
-
-            //     current_node.data.mask.clear();
-            //     current_node.data.mask.tag(@intCast(index));
-            //     try current_node.data.unmap(self.display);
-
-            //     try self.arrange();
+        // This will update the workspaces, only needed when changing the bitmask of a window
+        fn updateWorkspaces(self: *Self, window: *Window) void {
+            for (0..BITSIZE) |i| {
+                if (window.mask.has(@truncate(i))) {
+                    self.workspaces[i].addWindow(window) catch continue;
+                } else {
+                    self.workspaces[i].removeWindow(window) catch continue;
+                }
+            }
         }
 
-        fn toggleTagWindow(_: *anyopaque, _: usize) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
-            // if (self.current_window) |node| {
-            //     node.data.mask.toggleTag(@intCast(index));
+        fn tagWindow(ptr: *anyopaque, index: usize) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            if (index == self.current_workspace) return;
 
-            //     // Node has no tags so retag current workspace
-            //     if (node.data.mask.mask == 0) {
-            //         node.data.mask.tag(@intCast(index));
-            //         return;
-            //     }
-            // }
-            // try self.arrange();
+            const current_node = self.getCurrentWorkspace().current_window orelse return;
+
+            // Clean bitmask
+            const window = current_node.data.ptr;
+
+            // Adjust workspaces
+            window.mask.clear();
+            window.mask.tag(@intCast(index));
+
+            self.updateWorkspaces(window);
+            try window.unmap(self.display);
+            try self.arrange();
+        }
+
+        fn toggleTagWindow(ptr: *anyopaque, index: usize) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            const current_node = self.getCurrentWorkspace().current_window orelse return;
+
+            const window = current_node.data.ptr;
+            window.mask.toggleTag(@intCast(index));
+
+            // Node has no tags so retag current workspace
+            if (window.mask.mask == 0) {
+                try window.tag(@truncate(index));
+                return;
+            }
+
+            if (self.current_workspace == index) {
+                try window.unmap(self.display);
+            }
+
+            self.updateWorkspaces(window);
+
+            try self.arrange();
         }
 
         fn focusWindow(_: *anyopaque, _: x11.Window) Error!void {
@@ -706,11 +731,11 @@ pub fn WindowManager(comptime config: Config) type {
             // try self.focus();
         }
 
-        fn setLayout(_: *anyopaque, _: *const layout.Layout) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
-            // Self.layouts[self.current_workspace] = l;
+        fn setLayout(ptr: *anyopaque, layout: *const _layout.Layout) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            self.getCurrentWorkspace().setLayout(layout);
 
-            // try self.arrange();
+            try self.arrange();
         }
 
         fn incrementMaster(_: *anyopaque, _: i8) Error!void {
