@@ -92,11 +92,12 @@ pub const Default = Config{
         SC(ModLayer0, x11.XK_m, action.setLayout, .{&layouts.monocle}),
         SC(ModLayer0, x11.XK_t, action.setLayout, .{&layouts.tile}),
         SC(ModLayer0, x11.XK_b, action.setLayout, .{&layouts.bugo}),
+
         SC(ModLayer1, x11.XK_i, action.incrementMaster, .{1}),
         SC(ModLayer1, x11.XK_o, action.incrementMaster, .{-1}),
 
         // // Window configuration
-        // SC(ModLayer1, x11.XK_p, action.toggleMode, .{Mode.floating}),
+        SC(ModLayer1, x11.XK_p, action.toggleMode, .{Mode.floating}),
 
         // // Processes
         SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
@@ -107,6 +108,6 @@ pub const Default = Config{
     .buttons = &[_]shortcut.Shortcut{
         // Window placement & size
         SC(ModLayer0, x11.Button1, action.move, .{}),
-        // SC(ModLayer0, x11.Button3, action.resize, .{}),
+        SC(ModLayer0, x11.Button3, action.resize, .{}),
     },
 };

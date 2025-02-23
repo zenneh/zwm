@@ -24,6 +24,13 @@ pub const Alignment = struct {
             .height = a.height - b.height,
         };
     }
+
+    pub fn center(self: *Alignment) Pos {
+        return Pos{
+            .x = @divTrunc(self.pos.x + @as(c_int, @intCast(self.width)), 2),
+            .y = @divTrunc(self.pos.y + @as(c_int, @intCast(self.height)), 2),
+        };
+    }
 };
 
 // TODO, for window sizing
@@ -83,9 +90,6 @@ const BugoJanssen = struct {
                 }
             }
         }
-
-        // Calculate predefined widths and heights
-
     }
 };
 

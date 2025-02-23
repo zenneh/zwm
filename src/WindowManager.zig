@@ -454,29 +454,29 @@ pub fn WindowManager(comptime config: Config) type {
             self.input = mode;
         }
 
-        fn resizeWindow(_: *anyopaque, _: _layout.Pos) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
+        fn resizeWindow(ptr: *anyopaque, pos: _layout.Pos) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
 
-            // var offset_x: c_int = 0;
-            // var offset_y: c_int = 0;
-            // switch (self.input) {
-            //     .pointer => |p| {
-            //         offset_x = @intCast(pos.x - p.x);
-            //         offset_y = @intCast(pos.y - p.y);
-            //     },
-            //     .default => return,
-            // }
+            var offset_x: c_int = 0;
+            var offset_y: c_int = 0;
+            switch (self.input) {
+                .pointer => |p| {
+                    offset_x = @intCast(pos.x - p.x);
+                    offset_y = @intCast(pos.y - p.y);
+                },
+                .default => return,
+            }
 
-            // if (self.current_window) |w| {
-            //     const new_width: i32 = @as(i32, @intCast(w.data.alignment.width)) + @as(i32, @intCast(offset_x));
-            //     const new_height: i32 = @as(i32, @intCast(w.data.alignment.height)) + @as(i32, @intCast(offset_y));
+            if (self.getCurrentWindow()) |window| {
+                const new_width: i32 = @as(i32, @intCast(window.alignment.width)) + @as(i32, @intCast(offset_x));
+                const new_height: i32 = @as(i32, @intCast(window.alignment.height)) + @as(i32, @intCast(offset_y));
 
-            //     const a: u32 = if (new_width > 100) @intCast(new_width) else w.data.alignment.width;
-            //     const b: u32 = if (new_height > 100) @intCast(new_height) else w.data.alignment.height;
+                const a: u32 = if (new_width > 100) @intCast(new_width) else window.alignment.width;
+                const b: u32 = if (new_height > 100) @intCast(new_height) else window.alignment.height;
 
-            //     try w.data.resize(self.display, a, b);
-            //     try w.data.focus(self.display);
-            // }
+                try window.resize(self.display, a, b);
+                try window.focus(self.display);
+            }
         }
 
         fn moveWindow(ptr: *anyopaque, pos: _layout.Pos) Error!void {
@@ -486,13 +486,18 @@ pub fn WindowManager(comptime config: Config) type {
                 .pointer => |p| {
                     const new_x = pos.x - p.x;
                     const new_y = pos.y - p.y;
-                    if (self.getCurrentWindow()) |w| {
-                        w.setPreferences(.{
-                            .pos = _layout.Pos{ .x = new_x, .y = new_y },
-                        });
-                        // try w.focus(self.display);
-                        try w.move(self.display, new_x, new_y);
+
+                    if (self.getCurrentWindow()) |window| {
+                        try window.move(self.display, new_x, new_y);
                     }
+                    try self.getCurrentWorkspace().moveWindow(.{ .x = new_x, .y = new_y });
+                    // if (self.getCurrentWindow()) |w| {
+                    //     // try w.focus(self.display);
+                    //     try w.move(self.display, new_x, new_y);
+                    //     try
+
+                    //     // Check if window is on another window's place
+                    // }
                 },
                 .default => return,
             }
@@ -520,8 +525,6 @@ pub fn WindowManager(comptime config: Config) type {
             node.data = Window.init(x11_window);
             node.data.mask.tag(self.current_workspace);
 
-            try node.data.selectInput(self.display, WINDOW_MASK);
-
             try node.data.map(self.display);
 
             self.windows.prepend(node);
@@ -531,6 +534,8 @@ pub fn WindowManager(comptime config: Config) type {
             try self.focus();
 
             try self.arrange();
+
+            try node.data.selectInput(self.display, WINDOW_MASK);
         }
 
         fn destroyWindow(ptr: *anyopaque, x11_window: x11.Window) Error!void {
@@ -545,6 +550,7 @@ pub fn WindowManager(comptime config: Config) type {
                 }
             }
 
+            try node.data.selectInput(self.display, 0);
             try node.data.destroy(self.display);
             self.windows.remove(node);
 

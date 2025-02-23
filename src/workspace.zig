@@ -2,13 +2,10 @@ const std = @import("std");
 const _layout = @import("layout.zig");
 const x11 = @import("X11.zig");
 const _window = @import("window.zig");
-const _window_manager = @import("WindowManager.zig");
 
 const Alignment = _layout.Alignment;
 const Layout = _layout.Layout;
 const Allocator = std.mem.Allocator;
-
-const WINDOW_MASK = _window_manager.WINDOW_MASK;
 
 pub const Error = error{
     WindowAlreadyInWorkspace,
@@ -19,6 +16,7 @@ pub const Error = error{
 pub fn WindowData(comptime T: type) type {
     return struct {
         ptr: *T,
+        alignment: Alignment,
         preferred: ?Alignment, // Preferred alignment
     };
 }
@@ -122,6 +120,7 @@ pub fn Workspace(comptime Mask: type) type {
 
             node.*.data = WindowData(Window){
                 .ptr = window,
+                .alignment = window.alignment,
                 .preferred = Alignment{},
             };
 
@@ -140,9 +139,10 @@ pub fn Workspace(comptime Mask: type) type {
 
         pub fn focusWindow(self: *Self, x11_window: x11.Window, display: *x11.Display) Error!void {
             const node = self.findWindowNodeByHandle(x11_window) orelse return;
-            self.current_window = node;
+            if (self.current_window == node) return;
 
             try self.focus(display);
+            std.log.info("focusWindow called", .{});
         }
 
         pub fn focus(self: *Self, display: *x11.Display) Error!void {
@@ -156,6 +156,76 @@ pub fn Workspace(comptime Mask: type) type {
                 } else {
                     try node.data.ptr.unfocus(display);
                 }
+            }
+            std.log.info("focus called", .{});
+        }
+
+        pub fn moveWindow(self: *Self, pos: _layout.Pos) Error!void {
+            const window = self.current_window orelse return;
+            const center_window: _layout.Pos = window.data.alignment.center();
+            var it = self.windows.first;
+
+            const DISTANCE_THRESHOLD: f32 = 100.0; // Adjust this constant as needed
+
+            while (it) |node| : (it = node.next) {
+                if (node.data.ptr.mode != .default) continue;
+
+                // Calculate center of current node
+                const node_center = node.data.ptr.alignment.center();
+
+                // Calculate distance between centers
+                const dx: f32 = @floatFromInt(center_window.x + pos.x - node_center.x);
+                const dy: f32 = @floatFromInt(center_window.y + pos.y - node_center.y);
+                const distance = @sqrt(dx * dx + dy * dy);
+
+                // If distance is less than threshold, swap nodes
+                std.log.info("Distance: {}:{}", .{ node.data.ptr.handle, distance });
+                if (distance < DISTANCE_THRESHOLD and node != window) {
+                    std.log.info("Swapping nodes", .{});
+                    // try swapNodes(self, window, node);
+                    break;
+                }
+            }
+        }
+
+        fn swapNodes(self: *Self, node1: *Windows.Node, node2: *Windows.Node) Error!void {
+            // Handle special cases
+            if (node1 == node2) return;
+
+            // Store temporary references
+            const node1_prev = node1.prev;
+            const node1_next = node1.next;
+            const node2_prev = node2.prev;
+            const node2_next = node2.next;
+
+            // Update adjacent nodes' references
+            if (node1_prev) |prev| prev.next = node2;
+            if (node1_next) |next| {
+                if (next != node2) next.prev = node2;
+            }
+
+            if (node2_prev) |prev| {
+                if (prev != node1) prev.next = node1;
+            }
+            if (node2_next) |next| next.prev = node1;
+
+            // Update the swapped nodes' references
+            node1.prev = if (node2_prev == node1) node2 else node2_prev;
+            node1.next = if (node2_next == node1) node2 else node2_next;
+            node2.prev = if (node1_prev == node2) node1 else node1_prev;
+            node2.next = if (node1_next == node2) node1 else node1_next;
+
+            // Update list head and tail if necessary
+            if (self.windows.first == node1) {
+                self.windows.first = node2;
+            } else if (self.windows.first == node2) {
+                self.windows.first = node1;
+            }
+
+            if (self.windows.last == node1) {
+                self.windows.last = node2;
+            } else if (self.windows.last == node2) {
+                self.windows.last = node1;
             }
         }
 
@@ -237,11 +307,19 @@ pub fn Workspace(comptime Mask: type) type {
 
         pub fn removeWindow(self: *Self, window: *const Window) Error!void {
             const node = self.getWindowNodeByReference(window) orelse return Error.WindowNotInWorkspace;
-
             self.windows.remove(node);
-            self.allocator.destroy(node);
+            defer self.allocator.destroy(node);
 
-            self.current_window = null;
+            if (self.current_window == node) {
+                if (node.next) |next| {
+                    self.current_window = next;
+                }
+                if (node.prev) |prev| {
+                    self.current_window = prev;
+                } else {
+                    self.current_window = self.windows.first;
+                }
+            }
         }
 
         // pub fn mapAllWindows(self: *Self, display: *x11.Display) void {
