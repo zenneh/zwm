@@ -15,7 +15,7 @@ const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
 const ROOT_MASK = x11.SubstructureRedirectMask | x11.SubstructureNotifyMask | x11.ButtonPressMask | x11.ButtonReleaseMask | x11.EnterWindowMask;
-const WINDOW_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
+pub const WINDOW_MASK = x11.EnterWindowMask | x11.LeaveWindowMask;
 const KEY_MASK = x11.KeyPressMask | x11.KeyReleaseMask;
 const BUTTON_MASK = x11.ButtonPressMask | x11.ButtonReleaseMask;
 const POINTER_MASK = x11.PointerMotionMask | BUTTON_MASK;
@@ -273,6 +273,10 @@ pub fn WindowManager(comptime config: Config) type {
             while (it) |node| : (it = node.next) {
                 self.allocator.destroy(node);
             }
+
+            for (&self.workspaces) |*workspace| {
+                workspace.deinit();
+            }
         }
 
         // Start the window manager and listen for events
@@ -368,94 +372,15 @@ pub fn WindowManager(comptime config: Config) type {
             };
         }
 
-        fn getActiveAlignmentsOwnedSlice(self: *Self, mode: _window.Mode, alignments: *[]*_layout.Alignment, preferences: *[]?*_layout.Alignment, windows: *[]*Window) Error!void {
-            var count: usize = 0;
-            var it = self.windows.first;
-            while (it) |node| : (it = node.next) {
-                if (node.data.mode == mode and node.data.mask.has(self.current_workspace)) count += 1;
-            }
-
-            alignments.* = try self.allocator.alloc(*_layout.Alignment, count);
-            errdefer self.allocator.free(alignments.*);
-
-            preferences.* = try self.allocator.alloc(?*_layout.Alignment, count);
-            errdefer self.allocator.free(preferences.*);
-
-            windows.* = try self.allocator.alloc(*Window, count);
-            errdefer self.allocator.free(windows.*);
-
-            var index: usize = 0;
-            it = self.windows.first;
-            while (it) |node| : (it = node.next) {
-                if (node.data.mode != mode or !node.data.mask.has(self.current_workspace)) continue;
-                alignments.*[index] = &node.data.alignment;
-                if (node.data.preferences) |*al| {
-                    preferences.*[index] = al;
-                } else {
-                    preferences.*[index] = null;
-                }
-                windows.*[index] = &node.data;
-                index += 1;
-            }
-        }
-
         fn arrange(self: *Self) Error!void {
             try self.getCurrentWorkspace().arrange(self.root.alignment, self.display);
-            // var default_alignments: []*layout.Alignment = undefined;
-            // var default_preferences: []?*layout.Alignment = undefined;
-            // var default_windows: []*Window = undefined;
-
-            // try self.getActiveAlignmentsOwnedSlice(.default, &default_alignments, &default_preferences, &default_windows);
-            // defer self.allocator.free(default_alignments);
-            // defer self.allocator.free(default_preferences);
-            // defer self.allocator.free(default_windows);
-
-            // std.log.debug("root alignment {any}", .{self.root.alignment});
-
-            // try self.restack(default_windows);
-
-            // Self.layouts[self.current_workspace].arrange(&.{
-            //     .index = Self.master_counts[self.current_workspace],
-            //     .root = &self.root.alignment,
-            // }, default_alignments, default_preferences);
-
-            // for (default_windows, 0..) |w, i| {
-            //     try w.moveResize(
-            //         self.display,
-            //         default_alignments[i].pos.x,
-            //         default_alignments[i].pos.y,
-            //         default_alignments[i].width,
-            //         default_alignments[i].height,
-            //     );
-            // }
+            try self.restack();
         }
 
         fn restack(
-            _: *Self,
-            _: []*Window,
+            self: *Self,
         ) Error!void {
-            // var sibling: x11.Window = self.root.handle;
-
-            // for (windows) |w| {
-            //     if (self.current_window) |cw| {
-            //         if (&cw.data != w) {
-            //             var changes = x11.XWindowChanges{
-            //                 .sibling = sibling,
-            //                 .stack_mode = x11.Above,
-            //             };
-            //             try w.configure(self.display, x11.CWSibling | x11.CWStackMode, &changes);
-            //             sibling = w.handle;
-            //         }
-            //     }
-            // }
-
-            // if (self.current_window) |cw| {
-            //     var changes = x11.XWindowChanges{
-            //         .sibling = sibling,
-            //         .stack_mode = x11.Above,
-            //     };
-            //     try cw.data.configure(self.display, x11.CWSibling | x11.CWStackMode, &changes);
-            // }
+            try self.getCurrentWorkspace().restack(self.root.handle, self.display);
         }
 
         fn findWindowNodeByHandle(self: *Self, x11_window: x11.Window) ?*WindowList.Node {
@@ -476,28 +401,24 @@ pub fn WindowManager(comptime config: Config) type {
             return null;
         }
 
-        fn toggleMode(_: *anyopaque, _: _window.Mode) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
-            // if (self.current_window) |node| {
-            //     const current_mode = node.data.mode;
-            //     node.data.setMode(if (current_mode == mode) .default else mode);
-
-            //     try self.arrange();
-            // }
+        fn toggleMode(ptr: *anyopaque, mode: _window.Mode) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            const node = self.getCurrentWorkspace().current_window orelse return;
+            node.data.ptr.setMode(mode);
+            try self.arrange();
         }
 
-        fn focus(_: *Self) Error!void {
-            // var it = self.windows.first;
-            // while (it) |node| : (it = node.next) {
-            //     if (node == self.current_window) {
-            //         try node.data.focus(self.display);
-            //         self.grabButtons(node);
-            //     } else {
-            //         try node.data.unfocus(self.display);
-            //     }
-            // }
+        fn focus(self: *Self) Error!void {
+            const workspace = self.getCurrentWorkspace();
 
-            // try self.arrange();
+            try workspace.focus(self.display);
+            if (workspace.getCurrentWindow()) |window| {
+                self.grabButtons(window);
+            }
+
+            try self.restack();
+
+            try self.arrange();
         }
 
         fn setAction(ptr: *anyopaque, mode: Action) Error!void {
@@ -533,8 +454,6 @@ pub fn WindowManager(comptime config: Config) type {
             self.input = mode;
         }
 
-        fn moveAlignWindow(_: *Self, _: _layout.Pos) Error!void {}
-
         fn resizeWindow(_: *anyopaque, _: _layout.Pos) Error!void {
             // const self: *Self = @ptrCast(@alignCast(ptr));
 
@@ -560,27 +479,35 @@ pub fn WindowManager(comptime config: Config) type {
             // }
         }
 
-        fn moveWindow(_: *anyopaque, _: _layout.Pos) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
+        fn moveWindow(ptr: *anyopaque, pos: _layout.Pos) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
 
-            // switch (self.input) {
-            //     .pointer => |p| {
-            //         const new_x = pos.x - p.x;
-            //         const new_y = pos.y - p.y;
-            //         if (self.current_window) |w| {
-            //             w.data.setPreferences(.{
-            //                 .pos = layout.Pos{ .x = new_x, .y = new_y },
-            //             });
-            //             try w.data.focus(self.display);
-            //             try w.data.move(self.display, new_x, new_y);
-            //         }
-            //     },
-            //     .default => return,
-            // }
+            switch (self.input) {
+                .pointer => |p| {
+                    const new_x = pos.x - p.x;
+                    const new_y = pos.y - p.y;
+                    if (self.getCurrentWindow()) |w| {
+                        w.setPreferences(.{
+                            .pos = _layout.Pos{ .x = new_x, .y = new_y },
+                        });
+                        // try w.focus(self.display);
+                        try w.move(self.display, new_x, new_y);
+                    }
+                },
+                .default => return,
+            }
         }
 
         fn getCurrentWorkspace(self: *Self) *Workspace {
             return &self.workspaces[self.current_workspace];
+        }
+
+        fn getCurrentWindow(self: *Self) ?*Window {
+            if (self.getCurrentWorkspace().current_window) |node| {
+                return node.data.ptr;
+            }
+
+            return null;
         }
 
         // Create a window and adds it to the current workspace
@@ -593,8 +520,8 @@ pub fn WindowManager(comptime config: Config) type {
             node.data = Window.init(x11_window);
             node.data.mask.tag(self.current_workspace);
 
-            // TODO: Remove here
             try node.data.selectInput(self.display, WINDOW_MASK);
+
             try node.data.map(self.display);
 
             self.windows.prepend(node);
@@ -642,7 +569,9 @@ pub fn WindowManager(comptime config: Config) type {
                     try node.data.selectInput(self.display, 0);
                 }
             }
+
             try self.arrange();
+            try self.focus();
         }
 
         // This will update the workspaces, only needed when changing the bitmask of a window
@@ -696,39 +625,25 @@ pub fn WindowManager(comptime config: Config) type {
             try self.arrange();
         }
 
-        fn focusWindow(_: *anyopaque, _: x11.Window) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
-            // if (self.findWindowNodeByHandle(x11_window)) |w| {
-            //     self.current_window = w;
-            // }
+        fn focusWindow(ptr: *anyopaque, x11_window: x11.Window) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
 
-            // try self.focus();
+            try self.getCurrentWorkspace().focusWindow(x11_window, self.display);
+            try self.restack();
         }
 
-        fn focusNextWindow(_: *anyopaque) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
-            // const current = self.current_window orelse return;
-            // var it = current.next;
-            // while (it) |node| : (it = node.next) {
-            //     if (!node.data.mask.has(self.current_workspace)) continue;
-            //     self.current_window = node;
-            //     break;
-            // }
+        fn focusNextWindow(ptr: *anyopaque) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
 
-            // try self.focus();
+            try self.getCurrentWorkspace().focusNextWindow(self.display);
+            try self.restack();
         }
 
-        fn focusPrevWindow(_: *anyopaque) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
-            // const current = self.current_window orelse return;
-            // var it = current.prev;
-            // while (it) |node| : (it = node.prev) {
-            //     if (!node.data.mask.has(self.current_workspace)) continue;
-            //     self.current_window = node;
-            //     break;
-            // }
+        fn focusPrevWindow(ptr: *anyopaque) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
 
-            // try self.focus();
+            try self.getCurrentWorkspace().focusPrevWindow(self.display);
+            try self.restack();
         }
 
         fn setLayout(ptr: *anyopaque, layout: *const _layout.Layout) Error!void {
@@ -738,31 +653,12 @@ pub fn WindowManager(comptime config: Config) type {
             try self.arrange();
         }
 
-        fn incrementMaster(_: *anyopaque, _: i8) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
+        fn incrementMaster(ptr: *anyopaque, amount: i8) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
 
-            // var window_count: usize = 0;
-            // var it = self.windows.first;
-            // while (it) |node| : (it = node.next) {
-            //     if (node.data.mask.has(self.current_workspace)) window_count += 1;
-            // }
+            self.getCurrentWorkspace().incrementMaster(amount);
 
-            // // Get current master count
-            // const current_master = Self.master_counts[self.current_workspace];
-
-            // if (window_count == 0) return;
-
-            // var new_master: i32 = @as(i32, @intCast(current_master)) + amount;
-
-            // if (new_master < 0) {
-            //     new_master = 0;
-            // } else if (new_master > @as(i32, @intCast(window_count - 1))) {
-            //     new_master = @intCast(window_count - 1);
-            // }
-
-            // Self.master_counts[self.current_workspace] = @intCast(new_master);
-
-            // try self.arrange();
+            try self.arrange();
         }
 
         fn process(ptr: *anyopaque, args: []const []const u8) Error!void {
@@ -777,26 +673,26 @@ pub fn WindowManager(comptime config: Config) type {
             util.spawn_process(&env_map, args, self.allocator) catch return;
         }
 
-        fn kill(_: *anyopaque) Error!void {
-            // const self: *Self = @ptrCast(@alignCast(ptr));
+        fn kill(ptr: *anyopaque) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
 
-            // // TODO: This will cause issues for focussing on a window within the same workspace
-            // if (self.current_window) |node| {
-            //     try node.data.destroy(self.display);
-            //     self.windows.remove(node);
+            const window = self.getCurrentWorkspace().getCurrentWindow() orelse return;
+            for (0..BITSIZE) |i| {
+                if (window.mask.has(@truncate(i))) {
+                    self.workspaces[i].removeWindow(window) catch {
+                        std.log.err("Window has no Workspace {}", .{i});
+                    };
+                }
+            }
 
-            //     if (node.next) |n| {
-            //         self.current_window = n;
-            //     } else if (node.prev) |p| {
-            //         self.current_window = p;
-            //     } else self.current_window = self.findFirstActiveNode();
+            const node = self.findWindowNodeByHandle(window.handle) orelse return;
+            try node.data.destroy(self.display);
+            self.windows.remove(node);
+            self.allocator.destroy(node);
 
-            //     self.allocator.destroy(node);
-            // }
-
-            // try self.focus();
-
-            // try self.arrange();
+            try self.restack();
+            try self.arrange();
+            try self.focus();
         }
 
         fn handleKeyEvent(ptr: *anyopaque, event: *const x11.XKeyEvent) Error!void {
@@ -816,12 +712,12 @@ pub fn WindowManager(comptime config: Config) type {
             return 0;
         }
 
-        fn grabButtons(self: *Self, node: *WindowList.Node) void {
+        fn grabButtons(self: *Self, window: *const Window) void {
             _ = x11.XUngrabButton(self.display, x11.AnyButton, x11.AnyModifier, self.root.handle);
 
             for (Self.buttons) |button| {
                 std.log.debug("grabbing button {d}", .{button.key});
-                _ = x11.XGrabButton(self.display, @intCast(button.key), button.mod, node.data.handle, x11.False, BUTTON_MASK, x11.GrabModeAsync, x11.GrabModeSync, x11.None, x11.None);
+                _ = x11.XGrabButton(self.display, @intCast(button.key), button.mod, window.handle, x11.False, BUTTON_MASK, x11.GrabModeAsync, x11.GrabModeSync, x11.None, x11.None);
             }
         }
 

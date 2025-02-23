@@ -85,8 +85,8 @@ pub const Default = Config{
         SC(ModLayer0, x11.XK_c, action.check, .{}),
 
         // // Navigation
-        // SC(ModLayer0, x11.XK_n, action.focusNext, .{}),
-        // SC(ModLayer0, x11.XK_p, action.focusPrev, .{}),
+        SC(ModLayer0, x11.XK_n, action.focusNext, .{}),
+        SC(ModLayer0, x11.XK_p, action.focusPrev, .{}),
 
         // // Workspace configuration
         SC(ModLayer0, x11.XK_m, action.setLayout, .{&layouts.monocle}),
@@ -102,11 +102,11 @@ pub const Default = Config{
         SC(ModLayer1, x11.XK_t, action.process, .{cmd("st")}),
         SC(ModLayer1, x11.XK_f, action.process, .{cmd("firefox")}),
 
-        // SC(ModLayer0, x11.XK_q, action.kill, .{}),
+        SC(ModLayer0, x11.XK_q, action.kill, .{}),
     },
     .buttons = &[_]shortcut.Shortcut{
         // Window placement & size
-        // SC(ModLayer0, x11.Button1, action.move, .{}),
+        SC(ModLayer0, x11.Button1, action.move, .{}),
         // SC(ModLayer0, x11.Button3, action.resize, .{}),
     },
 };
