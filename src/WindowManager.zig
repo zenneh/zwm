@@ -80,6 +80,7 @@ pub const Context = struct {
         focusPrevWindow: *const fn (ptr: *anyopaque) Error!void,
         setLayout: *const fn (ptr: *anyopaque, l: *const _layout.Layout) Error!void,
         incrementMaster: *const fn (ptr: *anyopaque, amount: i8) Error!void,
+        incrementGapsize: *const fn (ptr: *anyopaque, amount: i8) Error!void,
 
         process: *const fn (ptr: *anyopaque, args: []const []const u8) Error!void,
         kill: *const fn (ptr: *anyopaque) Error!void,
@@ -163,6 +164,9 @@ pub const Context = struct {
     pub fn incrementMaster(self: *Context, amount: i8) Error!void {
         try self.vtable.incrementMaster(self.ptr, amount);
     }
+    pub fn incrementGapsize(self: *Context, amount: i8) Error!void {
+        try self.vtable.incrementGapsize(self.ptr, amount);
+    }
     pub fn process(self: *Context, args: []const []const u8) Error!void {
         try self.vtable.process(self.ptr, args);
     }
@@ -215,6 +219,9 @@ pub fn WindowManager(comptime config: Config) type {
         // Action state for handling tiling, resizing and moving
         action: Action,
 
+        // Size of gaps to display in layouts
+        gapsize: u8,
+
         // For each XEvent we allocate space for the handlers
         const event_handlers = util.createEventHandlers(config.handlers);
 
@@ -263,6 +270,7 @@ pub fn WindowManager(comptime config: Config) type {
                 .state = .initial,
                 .input = .default,
                 .action = .arrange,
+                .gapsize = config.gapsize,
                 .workspaces = .{Workspace.init(allocator, config.layout)} ** BITSIZE,
             };
         }
@@ -366,6 +374,7 @@ pub fn WindowManager(comptime config: Config) type {
                     .focusPrevWindow = focusPrevWindow,
                     .setLayout = setLayout,
                     .incrementMaster = incrementMaster,
+                    .incrementGapsize = incrementGapsize,
                     .process = process,
                     .kill = kill,
                 },
@@ -373,8 +382,10 @@ pub fn WindowManager(comptime config: Config) type {
         }
 
         fn arrange(self: *Self) Error!void {
-            try self.getCurrentWorkspace().arrange(self.root.alignment, self.display);
+            try self.getCurrentWorkspace().arrange(self.gapsize, self.root.alignment, self.display);
             try self.restack();
+
+            self.sync();
         }
 
         fn restack(
@@ -426,8 +437,15 @@ pub fn WindowManager(comptime config: Config) type {
 
             switch (mode) {
                 .arrange => {
+                    try self.getCurrentWorkspace().setState(.default);
                     try self.arrange();
                 },
+
+                .move => {
+                    const window = self.getCurrentWorkspace().current_window orelse return;
+                    try self.getCurrentWorkspace().setState(.{ .moving = window });
+                },
+
                 else => {},
             }
 
@@ -490,7 +508,7 @@ pub fn WindowManager(comptime config: Config) type {
                     if (self.getCurrentWindow()) |window| {
                         try window.move(self.display, new_x, new_y);
                     }
-                    try self.getCurrentWorkspace().moveWindow(.{ .x = new_x, .y = new_y });
+                    try self.getCurrentWorkspace().moveWindow(pos);
                     // if (self.getCurrentWindow()) |w| {
                     //     // try w.focus(self.display);
                     //     try w.move(self.display, new_x, new_y);
@@ -663,6 +681,23 @@ pub fn WindowManager(comptime config: Config) type {
             const self: *Self = @ptrCast(@alignCast(ptr));
 
             self.getCurrentWorkspace().incrementMaster(amount);
+
+            try self.arrange();
+        }
+
+        fn incrementGapsize(ptr: *anyopaque, amount: i8) Error!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+
+            const current = @as(i8, @intCast(self.gapsize));
+            const new = std.math.add(i8, current, amount) catch return;
+
+            if (new < 0) {
+                self.gapsize = 0;
+            } else {
+                self.gapsize = @as(u8, @intCast(new));
+            }
+
+            std.log.info("Gapsize {}", .{self.gapsize});
 
             try self.arrange();
         }

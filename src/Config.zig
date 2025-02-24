@@ -45,6 +45,8 @@ keys: []const shortcut.Shortcut,
 // User defined mouse button shortcuts
 buttons: []const shortcut.Shortcut,
 
+gapsize: u8,
+
 pub const Default = Config{
     // Use monitor refresh rate for event interval
     .event_fps = 60 / 144,
@@ -54,6 +56,8 @@ pub const Default = Config{
 
     // Default layout when opening a new workspace
     .layout = &layouts.monocle,
+
+    .gapsize = 8,
 
     // TODO: Theme
 
@@ -95,6 +99,9 @@ pub const Default = Config{
 
         SC(ModLayer1, x11.XK_i, action.incrementMaster, .{1}),
         SC(ModLayer1, x11.XK_o, action.incrementMaster, .{-1}),
+
+        SC(ModLayer2, x11.XK_i, action.incrementGapsize, .{8}),
+        SC(ModLayer2, x11.XK_o, action.incrementGapsize, .{-8}),
 
         // // Window configuration
         SC(ModLayer1, x11.XK_p, action.toggleMode, .{Mode.floating}),

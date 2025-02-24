@@ -14,14 +14,13 @@
 - [x] Implement restacking
 - [x] Fix arrange and restack bugs
 - [x] Implement size preferences
-- [ ] Implement window resizing
-- [ ] Reimplement tile layout
+- [x] Implement window resizing
 
 # Bugs
-- [ ] Windows don't get unmapped when changing workspaces
+- [x] Windows don't get unmapped when changing workspaces
 
 # Nextup
-- [ ] Implement window gaps
+- [x] Implement window gaps
 - [ ] x11 atoms
 - [ ] Cursors
 - [ ] Top bar :3

@@ -31,6 +31,11 @@ pub const Alignment = struct {
             .y = @divTrunc(self.pos.y + @as(c_int, @intCast(self.height)), 2),
         };
     }
+
+    pub fn within(self: *Alignment, pos: Pos) bool {
+        return pos.x >= self.pos.x and pos.x <= self.pos.x + @as(c_int, @intCast(self.width)) and
+            return pos.y >= self.pos.y and pos.y <= self.pos.y + @as(c_int, @intCast(self.height));
+    }
 };
 
 // TODO, for window sizing
@@ -39,6 +44,7 @@ pub const Constraint = struct {};
 // Data necessary for arrangement
 pub const Context = struct {
     index: usize,
+    gapsize: u32,
     root: *const Alignment,
 };
 
@@ -65,7 +71,20 @@ pub const layouts = struct {
 const Monocle = struct {
     pub fn arrange(ctx: *const Context, alignments: []*Alignment, _: []?*Alignment) void {
         for (alignments) |al| {
-            al.* = ctx.root.*;
+            const gap: c_int = @intCast(ctx.gapsize);
+            const pos = Pos{
+                .x = ctx.root.pos.x + gap,
+                .y = ctx.root.pos.y + gap,
+            };
+            const width = ctx.root.width - ctx.gapsize - ctx.gapsize;
+            const height = ctx.root.height - ctx.gapsize - ctx.gapsize;
+            al.* = Alignment{
+                .pos = pos,
+                .width = width,
+                .height = height,
+            };
+
+            std.log.info("Alignment {any}", .{al.*});
         }
     }
 };

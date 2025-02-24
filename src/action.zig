@@ -50,6 +50,10 @@ pub fn incrementMaster(ctx: *Context, amount: i8) Error!void {
     try ctx.incrementMaster(amount);
 }
 
+pub fn incrementGapsize(ctx: *Context, amount: i8) Error!void {
+    try ctx.incrementGapsize(amount);
+}
+
 pub fn process(ctx: *Context, args: []const []const u8) Error!void {
     try ctx.process(args);
 }
